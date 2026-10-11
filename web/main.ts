@@ -2324,8 +2324,9 @@ function frame(now: number): void {
     ctx.fillText(fatal, canvas.width / 2, canvas.height / 2);
     screenDirty = true;
   }
+  const drew = screenDirty;
   presentScreen();
-  phoneView.frame();
+  phoneView.frame(drew);
   magnifier.present();
   if (BENCH) benchSample(t0);
   screenStalls.charge('drawing the machine', tDraw);

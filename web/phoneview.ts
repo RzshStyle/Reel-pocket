@@ -185,6 +185,16 @@ export class PhoneView {
   // each is drawn on the stage (CSS pixels).
   private flatSrc: { top: Rect; bottom: Rect } | null = null;
   private flatCut: { top: Rect; bottom: Rect } | null = null;
+  // Frames left before the reel panel is lined up with the top glass
+  // (the artwork needs drawing first); 0 once done.
+  private flatAlignIn = 0;
+  private flatAlignTries = 0;
+  // What the reel panel must always show: the main reels and their display.
+  private flatKeep: Rect | null = null;
+  private flatSteps: HTMLCanvasElement[] = [];
+  // Set when the flat layout changed and needs drawing even if the machine didn't.
+  private flatStale = true;
+  flatAlignScore = 0;
   private flatDst: { top: Rect; bottom: Rect } | null = null;
   private flatCv = el('canvas', 'pv-flat');
   private glide: { from: { zoom: number; panX: number; panY: number }; to: { zoom: number; panX: number; panY: number }; t0: number } | null = null;
@@ -352,6 +362,8 @@ export class PhoneView {
     this.focus = this.pad(union([...useReels, ...vfd, ...deck.map(off)]), h * 0.35, whole);
 
     this.flatSrc = this.flatRegions(cab, useReels, vfd, deck.map(off), h);
+    this.flatAlignIn = this.flatSrc ? 20 : 0;
+    this.flatAlignTries = 0;
     this.deck = deck.map((lp) => this.makeKey(lp, 'pv-btn'));
     this.extras = extras.map((lp) => this.makeKey(lp, 'pv-btn pv-fbtn'));
     this.layoutDeck();
@@ -374,6 +386,7 @@ export class PhoneView {
     const lowest = Math.max(-Infinity, ...big.map((r) => r.top + r.height / 2));
     const reelBox = union(big.filter((r) => r.top + r.height / 2 >= lowest - maxH * 0.5));
     if (!reelBox) return null;
+    this.flatKeep = union([reelBox, ...vfd]);
     // A display sitting just above the reels starts the reel panel.
     const above = vfd.filter((v) => v.top < reelBox.top && reelBox.top - v.top < maxH * 1.5);
     const panelTop = Math.min(reelBox.top, ...above.map((v) => v.top));
@@ -402,16 +415,7 @@ export class PhoneView {
     if (split - topStart < capH * 2) return null;
     const top = frame(upper, topStart, split);
     const bottom = frame(below, split, bottomEnd);
-    if (!top || !bottom) return null;
-    // Both halves share one column range and so one horizontal scale:
-    // prize trails that run from the top glass down into the reel panel
-    // then stay in line.
-    const left = Math.min(top.left, bottom.left);
-    const right = Math.max(top.left + top.width, bottom.left + bottom.width);
-    return {
-      top: { ...top, left, width: right - left },
-      bottom: { ...bottom, left, width: right - left },
-    };
+    return top && bottom ? { top, bottom } : null;
   }
 
   // Where the top glass ends and the reel panel begins. Machines differ,
@@ -443,6 +447,83 @@ export class PhoneView {
     return bestLen >= capH * 0.15 ? lo + best : fallback;
   }
 
+  // The reel panel is drawn at a different angle from the top glass, so the
+  // same column (a prize trail, the cabinet sides) sits at different places
+  // across each. Find the horizontal zoom and shift of the reel panel that
+  // best lines its artwork up with the top glass: compare where vertical
+  // edges fall in a band either side of the join, over a range of zooms.
+  // The top glass keeps its own framing.
+  private alignBottom(): void {
+    const src = this.flatSrc;
+    const cv = this.host.canvas;
+    this.flatAlignScore = -9;
+    if (!src) return;
+    const N = 320;                                  // columns compared
+    const t = src.top, b = src.bottom;
+    const band = Math.min(t.height, b.height) * 0.35;
+    // Read the canvas at a fixed resolution: 3 x N columns either side of
+    // the join, covering the top's columns and a wider span for the panel.
+    // Stay on the panel itself (not the room behind the cabinet).
+    const wideL = Math.max(0, b.left - b.width * 0.03);
+    const wideR = Math.min(cv.width, b.left + b.width * 1.03);
+    const keep = this.flatKeep;
+    const W = N * 3, H = 24;
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H * 2;
+    const ctx = off.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    try {
+      ctx.drawImage(cv, t.left, t.top + t.height - band, t.width, band, 0, 0, W, H);
+      ctx.drawImage(cv, wideL, b.top, wideR - wideL, band, 0, H, W, H);
+    } catch { return; }
+    const px = ctx.getImageData(0, 0, W, H * 2).data;
+    // Vertical-edge strength per column, from the luminance step to the next.
+    const profile = (y0: number): Float32Array => {
+      const out = new Float32Array(W);
+      for (let y = y0; y < y0 + H; y++) {
+        for (let x = 0; x < W - 1; x++) {
+          const i = (y * W + x) * 4;
+          const l0 = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+          const l1 = px[i + 4] * 0.3 + px[i + 5] * 0.59 + px[i + 6] * 0.11;
+          out[x] += Math.abs(l1 - l0);
+        }
+      }
+      return out;
+    };
+    const pt = profile(0), pb = profile(H);
+    // Nothing drawn yet (artwork still loading): try again shortly.
+    if (!pt.some((v) => v > 0) || !pb.some((v) => v > 0)) {
+      if (++this.flatAlignTries < 10) this.flatAlignIn = 30;
+      return;
+    }
+    const wideW = wideR - wideL;
+    let best = -Infinity, bestL = b.left, bestW = b.width;
+    // Panel width from 85% to 140% of the top glass, any shift that stays
+    // on the panel and keeps the reels in view.
+    for (let k = 0.85; k <= 1.4; k += 0.005) {
+      const w = t.width * k;
+      for (let l = wideL; l + w <= wideR + 1; l += wideW / W * 2) {
+        if (keep && (l > keep.left || l + w < keep.left + keep.width)) continue;
+        let sum = 0, st = 0, sb = 0, stt = 0, sbb = 0, n = 0;
+        for (let u = 0; u < W; u += 3) {
+          const xb = ((l - wideL) + (u / W) * w) / wideW * W;
+          const j = Math.round(xb);
+          if (j < 0 || j >= W) continue;
+          const a = pt[u], c = pb[j];
+          sum += a * c; st += a; sb += c; stt += a * a; sbb += c * c; n++;
+        }
+        if (n < W / 4) continue;
+        const cov = sum - st * sb / n;
+        const r = cov / Math.sqrt(Math.max(1e-6, (stt - st * st / n) * (sbb - sb * sb / n)));
+        if (r > best) { best = r; bestL = l; bestW = w; }
+      }
+    }
+    this.flatAlignScore = best;
+    // Only trust a clear match.
+    if (best < 0.3) return;
+    src.bottom = { left: bestL, top: b.top, width: bestW, height: b.height };
+  }
+
   // Lay the two halves out on the stage: each as wide as the stage, the
   // pair shrunk together if they are taller than the room above the
   // feature strip, and sitting at the bottom of it, next to the keys.
@@ -469,24 +550,45 @@ export class PhoneView {
       top: { left: (sw - wt) / 2, top: y0, width: wt, height: ht },
       bottom: { left: (sw - wb) / 2, top: y0 + ht + gap, width: wb, height: hb },
     };
-    const dpr = window.devicePixelRatio || 1;
+    // Above 2x the extra pixels cost more than they show.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = Math.round(sw * dpr), H = Math.round(sh * dpr);
+    this.flatStale = true;
     if (this.flatCv.width !== W || this.flatCv.height !== H) { this.flatCv.width = W; this.flatCv.height = H; }
   }
 
+  // Called only on frames where the machine was redrawn. The cabinet
+  // canvas is several times bigger than the phone screen, and scaling it
+  // down in one go at high quality is slow on phones, so it is halved in
+  // cheap steps first (as the normal view does) and then drawn plainly.
   private drawFlat(): void {
     const d = this.flatDst, s = this.flatCut;
     if (!d || !s) return;
     const ctx = this.flatCv.getContext('2d');
     if (!ctx) return;
     const dpr = this.flatCv.width / Math.max(1, this.host.stage.clientWidth);
+    const need = Math.max(d.top.width / s.top.width, d.bottom.width / s.bottom.width) * dpr;
+    let src: HTMLCanvasElement = this.host.canvas;
+    let k = 1;
+    for (let n = 0; need * k * 2 <= 1 && n < 4; n++) {
+      const step = this.flatSteps[n] ??= document.createElement('canvas');
+      const w = Math.ceil(src.width / 2), h = Math.ceil(src.height / 2);
+      if (step.width !== w || step.height !== h) { step.width = w; step.height = h; }
+      const sc = step.getContext('2d')!;
+      sc.imageSmoothingEnabled = true;
+      sc.globalCompositeOperation = 'copy';
+      sc.drawImage(src, 0, 0, src.width, src.height, 0, 0, w, h);
+      src = step;
+      k /= 2;
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, this.flatCv.width, this.flatCv.height);
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'low';
     for (const part of ['top', 'bottom'] as const) {
       const a = s[part], b = d[part];
-      ctx.drawImage(this.host.canvas, a.left, a.top, a.width, a.height,
+      ctx.drawImage(src, a.left * k, a.top * k, a.width * k, a.height * k,
         b.left * dpr, b.top * dpr, b.width * dpr, b.height * dpr);
     }
   }
@@ -583,7 +685,8 @@ export class PhoneView {
 
   // Once per drawn frame: pick up a new cabinet, keep the framing, paint the
   // keys from the frame and follow the game in Auto view.
-  frame(): void {
+  // drew: whether the machine was redrawn this frame.
+  frame(drew = true): void {
     const cab = this.host.cabinet();
     if (cab !== this.cab) {
       if (cab) this.build(cab); else this.reset();
@@ -603,7 +706,12 @@ export class PhoneView {
         this.view = { ...v, w: s.w, h: s.h };
       }
     }
-    if (this.flatActive) this.drawFlat();
+    if (this.flatActive && this.flatAlignIn > 0 && --this.flatAlignIn === 0) {
+      this.alignBottom();
+      this.layoutFlat();
+      drew = true;
+    }
+    if (this.flatActive && (drew || this.flatStale)) { this.flatStale = false; this.drawFlat(); }
     if (++this.frameNo % 60 === 0) this.relabel();
     if (this.frameNo % 2) return;
     for (const k of this.deck) this.paintKey(k);
