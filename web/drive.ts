@@ -57,7 +57,8 @@ export function setupLink(c: DriveConfig): string {
 
 export function configFromSetupLink(text: string): DriveConfig | null {
   try {
-    const u = new URL(text.trim());
+    // Chat apps sometimes copy '&' as '&amp;'.
+    const u = new URL(text.trim().replace(/&amp;/g, '&'));
     const folder = u.searchParams.get('library');
     const key = u.searchParams.get('key');
     return folder && key ? { folder, key } : null;
