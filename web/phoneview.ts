@@ -24,6 +24,7 @@ const FEATURE_HOLD_MS = 1600;
 const GLIDE_MS = 350;
 // Height Auto keeps free under the machine for the feature keys.
 const STRIP_PX = 78;
+const PANEL_STRETCH = 1.6;
 // Attract mode flashes every lamp on the glass; feature keys only pop up
 // while someone is actually playing.
 const PLAYING_MS = 90_000;
@@ -449,8 +450,12 @@ export class PhoneView {
     const total = src.top.height * st + src.bottom.height * sb;
     if (total > room - gap) { const f = (room - gap) / total; st *= f; sb *= f; }
     this.flatCut = src;
-    const ht = src.top.height * st, hb = src.bottom.height * sb;
+    const ht = src.top.height * st;
     const wt = src.top.width * st, wb = src.bottom.width * sb;
+    // The reel panel is drawn tilted back, so it looks squashed. Stand it
+    // upright by stretching it into the spare height (at most PANEL_STRETCH).
+    const spare = room - gap - ht;
+    const hb = Math.max(src.bottom.height * sb, Math.min(spare, src.bottom.height * sb * PANEL_STRETCH));
     const y0 = Math.max(0, room - (ht + gap + hb)) / 2;
     this.flatDst = {
       top: { left: (sw - wt) / 2, top: y0, width: wt, height: ht },
