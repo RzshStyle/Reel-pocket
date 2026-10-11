@@ -41,8 +41,9 @@ function note(text: string, bad = false): HTMLParagraphElement {
 
 export function openOnlineSetup(returnTo: HTMLElement, importGames: ImportOnlineGames): void {
   const c = loadOnlineConfig();
-  const link = field(str('online.address'), c?.server ?? '', str('online.paste_the_library_address_or'));
-  const key = field(str('online.passcode'), c?.code ?? '', str('online.family_passcode'));
+  const shown = c?.server.startsWith('drive:') ? `https://drive.google.com/drive/folders/${c.server.slice(6)}` : c?.server ?? '';
+  const link = field(str('online.address'), shown, str('online.paste_the_library_address_or'));
+  const key = field(str('online.passcode'), c?.code ?? '', str('online.key_or_passcode'));
   const msg = note(str('online.setup_help'));
   const save = sheetRow(str('online.save_and_open'), '');
   save.addEventListener('click', () => {
