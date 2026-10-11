@@ -4,14 +4,16 @@ import type { Cabinet, CabLamp, Rect } from './dat';
 // each showing the cap's own artwork live (so HOLD HI reads as HOLD HI and
 // lights when the cap lights). Buttons elsewhere on the glass, such as a
 // feature's TAKE IT / LEAVE IT or DEAL / NO DEAL, pop up under the machine
-// while they are lit. Auto frames the reels, displays and deck; Machine
-// shows the whole cabinet.
+// while they are lit. Auto frames the reels, displays and deck; Flat lays the
+// top glass and the reel glass edge to edge, each as wide as the phone, without
+// the cabinet around them; Machine shows the whole cabinet.
 
-export type ViewMode = 'auto' | 'whole';
+export type ViewMode = 'auto' | 'flat' | 'whole';
 
 const MODE_KEY = 'fruitulator.phoneview2';
 const MODES: { id: ViewMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
+  { id: 'flat', label: 'Flat' },
   { id: 'whole', label: 'Machine' },
 ];
 const ZOOM_STEP = 1.25;
@@ -151,7 +153,7 @@ function friendlyWords(name: string): string {
 function storedMode(): ViewMode | null {
   try {
     const v = localStorage.getItem(MODE_KEY);
-    return v === 'whole' ? v : v === 'auto' || v === 'play' ? 'auto' : null;
+    return v === 'whole' || v === 'flat' ? v : v === 'auto' || v === 'play' ? 'auto' : null;
   } catch {
     return null;
   }
@@ -177,6 +179,11 @@ export class PhoneView {
   private whole: Rect | null = null;
   private play: Rect | null = null;
   private focus: Rect | null = null;
+  // Flat view: the top glass and the reel glass, in canvas pixels, and where
+  // each is drawn on the stage (CSS pixels).
+  private flatSrc: { top: Rect; bottom: Rect } | null = null;
+  private flatDst: { top: Rect; bottom: Rect } | null = null;
+  private flatCv = el('canvas', 'pv-flat');
   private glide: { from: { zoom: number; panX: number; panY: number }; to: { zoom: number; panX: number; panY: number }; t0: number } | null = null;
   private lastStage = { w: 0, h: 0 };
   private probe = document.createElement('canvas');
@@ -240,7 +247,8 @@ export class PhoneView {
 
     this.feature.hidden = true;
     this.feature.setAttribute('aria-label', 'Feature buttons');
-    host.stage.append(this.feature);
+    this.flatCv.hidden = true;
+    host.stage.append(this.flatCv, this.feature);
     host.stage.addEventListener('pointerup', (ev) => this.maybeDoubleTap(ev));
     host.stage.addEventListener('pointerdown', () => { this.playedAt = performance.now(); });
     if (location.search.includes('pvdebug')) {
@@ -279,6 +287,9 @@ export class PhoneView {
     this.feature.replaceChildren();
     this.feature.hidden = true;
     this.host.bar.hidden = true;
+    this.flatSrc = null;
+    this.flatDst = null;
+    this.showFlat(false);
   }
 
   private build(cab: Cabinet): void {
@@ -336,12 +347,114 @@ export class PhoneView {
     // What Auto must keep on screen: the reels, their display and the deck.
     this.focus = this.pad(union([...useReels, ...vfd, ...deck.map(off)]), h * 0.35, whole);
 
+    this.flatSrc = this.flatRegions(cab, useReels, vfd, deck.map(off), h);
     this.deck = deck.map((lp) => this.makeKey(lp, 'pv-btn'));
     this.extras = extras.map((lp) => this.makeKey(lp, 'pv-btn pv-fbtn'));
     this.layoutDeck();
     this.coinBtn.hidden = this.coins.length === 0;
     this.host.bar.hidden = false;
     this.lastStage = { w: 0, h: 0 };
+  }
+
+  // Flat view: the glass is everything drawn on the cabinet (caps, lamps,
+  // reels, displays); the cabinet's pillars and top box fall outside it. The
+  // reel glass runs from just above the main reels (taking in the stake and
+  // nudge lamps there) to below the deck; the top glass is everything above.
+  private flatRegions(cab: Cabinet, reels: Rect[], vfd: Rect[], deck: Rect[], capH: number): { top: Rect; bottom: Rect } | null {
+    const c = cab.content;
+    const whole = this.whole!;
+    const reelBox = union(reels);
+    if (!reelBox) return null;
+    const art = cab.lamps
+      .filter((lp) => lp.width > 4 && lp.height > 4 && lp.states.length > 0)
+      .map((lp) => ({ left: lp.left - c.left, top: lp.top - c.top, width: lp.width, height: lp.height }))
+      .filter((r) => r.left >= 0 && r.top >= 0 && r.left + r.width <= whole.width && r.top + r.height <= whole.height);
+    const glass = union([...art, ...reels, ...vfd, ...deck]);
+    if (!glass) return null;
+    const pad = capH * 0.3;
+    const left = Math.max(0, glass.left - pad);
+    const right = Math.min(whole.width, glass.left + glass.width + pad);
+    const split = Math.max(glass.top + capH, reelBox.top - capH * 1.6);
+    const deckBottom = deck.length ? Math.max(...deck.map((r) => r.top + r.height)) : reelBox.top + reelBox.height;
+    const bottomEnd = Math.min(whole.height, Math.max(deckBottom, reelBox.top + reelBox.height) + pad);
+    const top = Math.max(0, glass.top - pad);
+    if (split - top < capH * 2) return null;
+    return {
+      top: { left, top, width: right - left, height: split - top },
+      bottom: { left, top: split, width: right - left, height: bottomEnd - split },
+    };
+  }
+
+  // Lay the two halves out on the stage: each as wide as the stage, the
+  // pair shrunk together if they are taller than the room above the
+  // feature strip, and sitting at the bottom of it, next to the keys.
+  private layoutFlat(): void {
+    const src = this.flatSrc;
+    const sw = this.host.stage.clientWidth, sh = this.host.stage.clientHeight;
+    if (!src || sw <= 0 || sh <= 0) { this.flatDst = null; return; }
+    const room = sh - (this.extras.length ? STRIP_PX : 0);
+    const gap = 3;
+    let st = sw / src.top.width, sb = sw / src.bottom.width;
+    const total = src.top.height * st + src.bottom.height * sb + gap;
+    if (total > room) { const f = (room - gap) / (total - gap); st *= f; sb *= f; }
+    const ht = src.top.height * st, hb = src.bottom.height * sb;
+    const y0 = Math.max(0, room - (ht + gap + hb)) / 2;
+    const wt = src.top.width * st, wb = src.bottom.width * sb;
+    this.flatDst = {
+      top: { left: (sw - wt) / 2, top: y0, width: wt, height: ht },
+      bottom: { left: (sw - wb) / 2, top: y0 + ht + gap, width: wb, height: hb },
+    };
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.round(sw * dpr), H = Math.round(sh * dpr);
+    if (this.flatCv.width !== W || this.flatCv.height !== H) { this.flatCv.width = W; this.flatCv.height = H; }
+  }
+
+  private drawFlat(): void {
+    const d = this.flatDst, s = this.flatSrc;
+    if (!d || !s) return;
+    const ctx = this.flatCv.getContext('2d');
+    if (!ctx) return;
+    const dpr = this.flatCv.width / Math.max(1, this.host.stage.clientWidth);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, this.flatCv.width, this.flatCv.height);
+    ctx.imageSmoothingQuality = 'high';
+    for (const part of ['top', 'bottom'] as const) {
+      const a = s[part], b = d[part];
+      ctx.drawImage(this.host.canvas, a.left, a.top, a.width, a.height,
+        b.left * dpr, b.top * dpr, b.width * dpr, b.height * dpr);
+    }
+  }
+
+  private showFlat(on: boolean): void {
+    this.flatCv.hidden = !on;
+    this.host.canvas.style.visibility = on ? 'hidden' : '';
+  }
+
+  get flatActive(): boolean {
+    return this.mode === 'flat' && !!this.flatDst;
+  }
+
+  // Where a touch on the flat view lands on the real cabinet canvas, as a
+  // client point on that canvas, or null if it falls between the halves.
+  unflatten(clientX: number, clientY: number): { x: number; y: number } | null {
+    const d = this.flatDst, s = this.flatSrc;
+    if (!this.flatActive || !d || !s) return null;
+    const st = this.host.stage.getBoundingClientRect();
+    const x = clientX - st.left, y = clientY - st.top;
+    for (const part of ['top', 'bottom'] as const) {
+      const b = d[part], a = s[part];
+      if (x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height) {
+        const cx = a.left + ((x - b.left) / b.width) * a.width;
+        const cy = a.top + ((y - b.top) / b.height) * a.height;
+        const r = this.host.canvas.getBoundingClientRect();
+        return {
+          x: r.left + (cx / this.host.canvas.width) * r.width,
+          y: r.top + (cy / this.host.canvas.height) * r.height,
+        };
+      }
+    }
+    return null;
   }
 
   private pad(r: Rect | null, k: number, within: Rect): Rect | null {
@@ -425,6 +538,7 @@ export class PhoneView {
         this.view = { ...v, w: s.w, h: s.h };
       }
     }
+    if (this.flatActive) this.drawFlat();
     if (++this.frameNo % 60 === 0) this.relabel();
     if (this.frameNo % 2) return;
     for (const k of this.deck) this.paintKey(k);
@@ -595,6 +709,16 @@ export class PhoneView {
 
   applyMode(glide: boolean): void {
     if (!this.cab) return;
+    if (this.mode === 'flat') {
+      this.layoutFlat();
+      if (this.flatDst) {
+        this.showFlat(true);
+        this.feature.style.bottom = this.extras.length ? '6px' : '';
+        this.drawFlat();
+        return;
+      }
+    }
+    this.showFlat(false);
     if (this.mode === 'auto' && this.autoFrame(glide)) return;
     this.feature.style.bottom = '';
     this.frameRegion(this.mode === 'whole' ? this.whole : this.play ?? this.whole, glide);
@@ -701,7 +825,7 @@ export class PhoneView {
   }
 
   private maybeDoubleTap(ev: PointerEvent): void {
-    if (ev.pointerType === 'mouse' || this.host.isControlAt(ev.clientX, ev.clientY)) return;
+    if (ev.pointerType === 'mouse' || this.flatActive || this.host.isControlAt(ev.clientX, ev.clientY)) return;
     const now = performance.now();
     const near = Math.hypot(ev.clientX - this.lastTap.x, ev.clientY - this.lastTap.y) < 30;
     if (now - this.lastTap.t < DOUBLE_TAP_MS && near) {

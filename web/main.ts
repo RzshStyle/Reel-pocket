@@ -2581,6 +2581,13 @@ const FIT_MARGIN = 0.98;
 
 function cabinetHit(clientX: number, clientY: number): CabLamp | null {
   if (!cabinet) return null;
+  // In the flat view a touch lands on the redrawn glass; find the same spot on the cabinet.
+  if (phoneView.flatActive) {
+    const p = phoneView.unflatten(clientX, clientY);
+    if (!p) return null;
+    clientX = p.x;
+    clientY = p.y;
+  }
   const { x, y, scale } = layoutPoint({
     rect: screenEl.getBoundingClientRect(),
     canvas: { width: canvas.width, height: canvas.height },
@@ -2878,7 +2885,8 @@ pointerHost.addEventListener('pointerdown', (ev) => {
   if (ev.button !== 0) return;
   touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
   if (!capPointer.down(ev)) {
-    if (pinch) return;
+    // The flat view is laid out to fit; it doesn't pan or pinch.
+    if (pinch || phoneView.flatActive) return;
     const free = freePointers();
     if (free.length === 2) {
       ev.preventDefault();

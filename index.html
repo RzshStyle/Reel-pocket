@@ -325,6 +325,19 @@
         box-shadow: 0 2px 0 #5a060c, 0 0 14px rgba(255, 70, 80, 0.8);
       }
       /* Feature buttons pop up over the bottom of the machine while lit. */
+      /* Flat view: the top glass and reel glass drawn edge to edge over the cabinet. */
+      canvas.pv-flat {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        background: #000;
+        z-index: 1;
+      }
+      canvas.pv-flat[hidden] {
+        display: none;
+      }
       .pv-feature {
         position: absolute;
         left: 8px;
