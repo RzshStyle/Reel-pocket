@@ -264,7 +264,10 @@ export class PhoneView {
     zoom.append(out, inn, menu);
 
     const top = el('div', 'pv-top');
-    top.append(this.coinBtn, this.seg, zoom);
+    const logo = el('img', 'pv-logo') as HTMLImageElement;
+    logo.src = './icons/reel-pocket-logo.svg?v=1';
+    logo.alt = 'Reel Pocket';
+    top.append(this.coinBtn, logo, this.seg, zoom);
     host.bar.replaceChildren(top, this.main);
     this.paintSeg();
     this.applyButtonBar();

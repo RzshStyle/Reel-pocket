@@ -435,6 +435,22 @@
           height: 40px;
         }
       }
+      #padbar .pv-logo {
+        display: none;
+      }
+      /* On a computer the top bar has room for the logo, centred. */
+      @media (pointer: fine) and (min-width: 700px) {
+        body.pv-topbar #padbar .pv-logo {
+          display: block;
+          height: 30px;
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        body.pv-topbar #padbar .pv-top {
+          position: relative;
+        }
+      }
       /* Button bar off: credit, view and menu in a slim bar across the top,
          the machine below it. Landscape keeps its side panel. */
       @media not all and (orientation: landscape) and (max-height: 560px) {
