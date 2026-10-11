@@ -1,3 +1,5 @@
+import { configFromSetupLink, downloadDriveGame, markFetched, saveDriveConfig, type DriveConfig, type DriveGame } from './drive';
+import { openDriveLibrary } from './drivesheet';
 import {
   classifyGame, linkedInstances, missingProgramRoms, platformFor, type Game,
 } from '../src/machine/registry';
@@ -775,10 +777,15 @@ async function importFolderSets(sets: FolderSet[]): Promise<void> {
       const setAdded: string[] = [];
       trace(`set ${i + 1}/${sets.length}: ${set.name}`);
       try {
+        if (set.fetch) {
+          showBusy(str('drive.downloading_n', { 0: parseTitle(archiveStem(set.name)).title || set.name }));
+          set = { ...set, entries: await set.fetch() };
+        }
         await importFolderSet(set, {
           inFlight, landed, setAdded, trace,
           known: (hashes) => { known += hashes.length; },
         });
+        set.fetched?.();
       } catch (e) {
         trace(`failed ${set.name}: ${(e as Error).message || 'import error'}`);
         failed.push({ name: set.name, reason: (e as Error).message || str('main.import_error') });
@@ -3554,6 +3561,19 @@ function loadFromUrl(raw: string): void {
 const fromUrl = new URLSearchParams(location.search).get('fromUrl');
 if (fromUrl) loadFromUrl(fromUrl);
 
+function importDriveGames(c: DriveConfig, games: DriveGame[]): void {
+  if (batchRunning) return;
+  dismissError();
+  void importFolderSets(games.map((g) => ({
+    dir: g.name,
+    name: archiveStem(g.name),
+    entries: [],
+    zip: true,
+    fetch: async () => [await downloadDriveGame(c, g)],
+    fetched: () => markFetched(g),
+  })));
+}
+
 const addBtn = document.getElementById('addBtn') as HTMLButtonElement;
 function openPicker(which: 'folder' | 'files', direct = false): void {
   status.textContent = str('main.waiting_for_the_picker');
@@ -3599,7 +3619,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) pickerLeft(); else pickerBack();
 });
 function openAdd(ev: Event): void {
-  void openAddSheet(ev.currentTarget as HTMLElement, openPicker);
+  const from = ev.currentTarget as HTMLElement;
+  void openAddSheet(from, openPicker, () => void openDriveLibrary(from, importDriveGames));
 }
 addBtn.addEventListener('click', openAdd);
 document.getElementById('emptyAdd')!.addEventListener('click', openAdd);
@@ -3642,3 +3663,13 @@ console.info(`[fruitulator] build ${buildStamp()}`);
 
 reportInterruptedImport();
 startFrameLoop();
+
+// A setup link (?library=<folder>&key=<key>) connects this device to the online library.
+{
+  const setup = configFromSetupLink(location.href);
+  if (setup) {
+    saveDriveConfig(setup);
+    history.replaceState(null, '', location.pathname);
+    void openDriveLibrary(addBtn, importDriveGames);
+  }
+}

@@ -40,6 +40,10 @@
 #sheet-rows {
   display: flex;
   flex-direction: column;
+  /* Long lists (the online library) scroll inside the sheet. */
+  max-height: calc(100dvh - 140px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .sheet-row {
   font-weight: 600;

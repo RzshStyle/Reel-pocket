@@ -386,7 +386,10 @@ function directPick(
 
 export async function openAddSheet(
   returnTo: HTMLElement, pick: (which: 'folder' | 'files', direct?: boolean) => void,
+  openOnline?: () => void,
 ): Promise<void> {
+  const onlineRow = sheetRow(str('drive.online_library'), str('drive.your_google_drive_games'));
+  onlineRow.addEventListener('click', () => openOnline?.());
   const folderRow = sheetRow(str('library.game_folder'), str('library.one_game_s_folder_or'));
   folderRow.addEventListener('click', () => { closeSheet(); pick('folder'); });
   const folder = directPick(folderRow, 'folder', pick);
@@ -427,7 +430,7 @@ export async function openAddSheet(
   note.className = 'sheet-note';
   note.textContent = str('library.nothing_is_uploaded_anywhere_a');
 
-  showSheet(str('library.add_games'), [folder, files, usage, note], returnTo);
+  showSheet(str('library.add_games'), [...(openOnline ? [onlineRow] : []), folder, files, usage, note], returnTo);
 }
 
 function renameField(g: GameMeta, h: LibraryHandlers): HTMLElement {

@@ -212,6 +212,9 @@ export interface FolderSet {
   punnet?: boolean;
   inner?: ZipEntry;
   spares?: { name: string; file: File }[];
+  // Download the entries just before importing (online library), then report success.
+  fetch?: () => Promise<File[]>;
+  fetched?: () => void;
 }
 
 function dirOf(path: string): string {
