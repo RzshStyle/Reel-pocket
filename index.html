@@ -435,6 +435,26 @@
           height: 40px;
         }
       }
+      /* Button bar off: credit, view and menu in a slim bar across the top,
+         the machine below it. Landscape keeps its side panel. */
+      @media not all and (orientation: landscape) and (max-height: 560px) {
+        body.pv-topbar #padbar {
+          order: -1;
+          padding: calc(6px + env(safe-area-inset-top, 0px)) 12px 6px;
+          border-top: 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        body.pv-topbar #padbar .pv-main {
+          display: none;
+        }
+        body.pv-topbar #padbar .pv-zoom .pv-menu {
+          display: block;
+          font-size: 17px;
+        }
+        body.pv-topbar:has(#stage:not([hidden])) header {
+          display: none;
+        }
+      }
       #stage {
         width: 100%;
         flex: 1 1 0;

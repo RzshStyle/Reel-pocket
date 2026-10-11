@@ -5,6 +5,7 @@ import { card, checkRow } from './ui/rows';
 import { MENU_ICONS } from './ui/icons';
 import { hasOperatedSwitches, layoutNamedInputs, namedInputId, testLabelsForPanel, testRowsForPanel } from './switchids';
 import { reelBounceOn, setReelBounceOn } from './bouncepref';
+import { buttonBarOn, setButtonBarOn } from './deckbar';
 import { str } from './i18n';
 import { PANEL_SHOW } from './ui/drawer';
 
@@ -135,5 +136,12 @@ export function reelBounceRow(redraw: () => void): HTMLLabelElement {
   });
   box.checked = reelBounceOn();
   row.title = str('menupanels.the_small_settle_a_reel');
+  return row;
+}
+
+export function buttonBarRow(): HTMLLabelElement {
+  const { row, box } = checkRow(str('menupanels.button_bar'), (on) => setButtonBarOn(on));
+  box.checked = buttonBarOn();
+  row.title = str('menupanels.big_copies_of_the_machine');
   return row;
 }

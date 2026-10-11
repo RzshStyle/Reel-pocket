@@ -919,6 +919,8 @@
   "main.with_its_saved_state": " with its saved state",
   "main.with_its_state": " with its state",
   "maker.other": "Other",
+  "menupanels.big_copies_of_the_machine": "Big copies of the machine's buttons along the bottom of the screen",
+  "menupanels.button_bar": "Button bar",
   "menupanels.cabinet_sounds": "Cabinet sounds",
   "menupanels.coins_go_in_through_the": "Coins go in through the coin slot drawn on the cabinet - click or tap it.",
   "menupanels.no_coin_list_is_known": "No coin list is known for {0}. Use the coin slot on the glass if the layout draws one.",

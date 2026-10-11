@@ -1,4 +1,5 @@
 import type { Cabinet, CabLamp, Rect } from './dat';
+import { BUTTON_BAR_CHANGED, buttonBarOn } from './deckbar';
 
 // Phone controls. A pad of equal keys mirrors the machine's deck buttons,
 // each showing the cap's own artwork live (so HOLD HI reads as HOLD HI and
@@ -250,6 +251,8 @@ export class PhoneView {
     top.append(this.coinBtn, this.seg, zoom);
     host.bar.replaceChildren(top, this.main);
     this.paintSeg();
+    this.applyButtonBar();
+    window.addEventListener(BUTTON_BAR_CHANGED, () => this.applyButtonBar());
 
     this.feature.hidden = true;
     this.feature.setAttribute('aria-label', 'Feature buttons');
@@ -265,6 +268,12 @@ export class PhoneView {
         extras: this.extras.map((k) => [k.el.getAttribute('aria-label'), k.el.classList.contains('lit'), Math.round(k.lp.width), Math.round(k.lp.height), k.lp.label, k.lp.name, k.lp.legend?.off, k.lp.legend?.on]),
       });
     }
+  }
+
+  // Without the button bar, the credit, view and menu controls move to a
+  // slim bar across the top and the machine sits below it.
+  private applyButtonBar(): void {
+    document.body.classList.toggle('pv-topbar', !buttonBarOn());
   }
 
   setMode(m: ViewMode): void {
