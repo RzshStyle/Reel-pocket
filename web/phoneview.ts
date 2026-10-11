@@ -10,7 +10,8 @@ import type { Cabinet, CabLamp, Rect } from './dat';
 
 export type ViewMode = 'auto' | 'flat' | 'whole';
 
-const MODE_KEY = 'fruitulator.phoneview2';
+// Bumped when Flat became the default, so everyone starts on it once.
+const MODE_KEY = 'fruitulator.phoneview3';
 const MODES: { id: ViewMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
   { id: 'flat', label: 'Flat' },
@@ -200,7 +201,7 @@ export class PhoneView {
   private feature = el('div', 'pv-feature');
 
   constructor(private host: PhoneViewHost) {
-    this.mode = storedMode() ?? 'auto';
+    this.mode = storedMode() ?? 'flat';
     this.probe.width = 8;
     this.probe.height = 8;
 
@@ -441,7 +442,7 @@ export class PhoneView {
   private layoutFlat(): void {
     const src = this.flatSrc;
     const sw = this.host.stage.clientWidth, sh = this.host.stage.clientHeight;
-    if (!src || sw <= 0 || sh <= 0) { this.flatDst = null; return; }
+    if (!src || sw <= 0 || sh <= 0 || sw >= sh) { this.flatDst = null; return; }
     const room = sh - (this.extras.length ? STRIP_PX : 0);
     const gap = 3;
     // Each half fills the width on its own scale; if together they are
@@ -776,7 +777,9 @@ export class PhoneView {
       }
     }
     this.showFlat(false);
-    if (this.mode === 'auto' && this.autoFrame(glide)) return;
+    // Flat falls back to Auto where it can't stack the machine (landscape,
+    // or no clear top glass and reel panel).
+    if (this.mode !== 'whole' && this.autoFrame(glide)) return;
     this.feature.style.bottom = '';
     this.frameRegion(this.mode === 'whole' ? this.whole : this.play ?? this.whole, glide);
   }
