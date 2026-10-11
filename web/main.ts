@@ -2586,8 +2586,9 @@ function cabinetHit(clientX: number, clientY: number): CabLamp | null {
   if (phoneView.flatActive) {
     const p = phoneView.unflatten(clientX, clientY);
     if (!p) return null;
-    clientX = p.x;
-    clientY = p.y;
+    const r = screenEl.getBoundingClientRect();
+    clientX = r.left + (p.x / canvas.width) * r.width;
+    clientY = r.top + (p.y / canvas.height) * r.height;
   }
   const { x, y, scale } = layoutPoint({
     rect: screenEl.getBoundingClientRect(),
