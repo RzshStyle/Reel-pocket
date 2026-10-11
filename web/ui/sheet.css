@@ -144,3 +144,16 @@
   border-color: currentColor;
   background: rgba(255, 255, 255, 0.1);
 }
+
+.sheet-pick {
+  position: relative;
+}
+.sheet-pick > input.sheet-pick-input {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}

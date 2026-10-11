@@ -1,5 +1,5 @@
 import { everPlayed, lastPlayed, type GameMeta } from './store';
-import { parseTitle } from './title';
+import { parseTitle, titleSource } from './title';
 import { libraryMaker } from './maker';
 import { enhanceSelect } from './ui/dropdown';
 import { artwork, releaseArtwork } from './ui/art';
@@ -57,12 +57,12 @@ function storeSort(k: SortKey): void {
 }
 
 export function displayTitle(g: GameMeta): string {
-  return g.title?.trim() || parseTitle(g.sourceName ?? g.name).title;
+  return g.title?.trim() || parseTitle(titleSource(g)).title;
 }
 
 export function matches(g: GameMeta, q: string): boolean {
   if (!q) return true;
-  const t = parseTitle(g.sourceName ?? g.name);
+  const t = parseTitle(titleSource(g));
   const hay = `${displayTitle(g)} ${t.chips.join(' ')} ${t.raw} ${SYSTEM_LABELS[g.system] ?? g.system}`;
   return hay.toLowerCase().includes(q);
 }
@@ -184,7 +184,7 @@ interface CardOptions {
 }
 
 function gameCard(g: GameMeta, o: CardOptions): HTMLElement {
-  const parsed = parseTitle(g.sourceName ?? g.name);
+  const parsed = parseTitle(titleSource(g));
   const shown = displayTitle(g);
 
   const blocked = o.unplayable(g);

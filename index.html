@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title data-str="index.fruitulator">Fruitulator</title>
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <title data-str="index.fruitulator">Reel Pocket</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="theme-color" content="#000000" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-size='80'%3E%F0%9F%8D%92%3C/text%3E%3C/svg%3E" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="fruitulator" />
+    <meta name="apple-mobile-web-app-title" content="Reel Pocket" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <style>
     </style>
@@ -164,6 +164,263 @@
         font-family: var(--readout);
         font-size: 12px;
         color: var(--muted-dim);
+      }
+      #padbar {
+        --pv-bg: #0b0b0d;
+        --pv-key: #1b1b21;
+        --pv-key-edge: rgba(255, 255, 255, 0.14);
+        --pv-ink: #ece9e2;
+        --pv-mute: #8d8c96;
+        --pv-start: #e0242e;
+        --pv-gold: #f2b705;
+        width: 100%;
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        background: var(--pv-bg);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        box-sizing: border-box;
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: var(--readout, system-ui), system-ui, sans-serif;
+      }
+      #padbar[hidden], body:has(#stage[hidden]) #padbar {
+        display: none;
+      }
+      #padbar button {
+        font: inherit;
+        color: var(--pv-ink);
+        -webkit-tap-highlight-color: transparent;
+      }
+      #padbar .pv-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #padbar .pv-coin {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 14px 0 6px;
+        border-radius: 20px;
+        border: 0;
+        background: linear-gradient(180deg, #ffd34d, var(--pv-gold) 55%, #c98d00);
+        color: #2a1c00;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        box-shadow: 0 2px 0 #7a5600, 0 0 14px rgba(242, 183, 5, 0.35);
+      }
+      #padbar .pv-coin-disc {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #fff3c4, #e6a800 70%);
+        border: 2px solid #8a6200;
+        font-size: 16px;
+        color: #5a3c00;
+      }
+      #padbar .pv-coin.down {
+        transform: translateY(2px);
+        box-shadow: 0 0 0 #7a5600, 0 0 22px rgba(242, 183, 5, 0.6);
+      }
+      #padbar .pv-seg {
+        display: flex;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 10px;
+        background: var(--pv-key);
+        margin-left: auto;
+      }
+      #padbar .pv-seg button {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--pv-mute);
+        background: transparent;
+        border: 0;
+        border-radius: 7px;
+        padding: 8px 8px;
+      }
+      #padbar .pv-seg button[aria-pressed="true"] {
+        background: #3a3a44;
+        color: var(--pv-ink);
+      }
+      #padbar .pv-zoom {
+        display: flex;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 10px;
+        background: var(--pv-key);
+      }
+      #padbar .pv-zoom button {
+        width: 32px;
+        height: 30px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        font-size: 18px;
+        line-height: 1;
+      }
+      #padbar .pv-zoom .pv-menu {
+        display: none;
+      }
+      #padbar .pv-zoom button:active {
+        background: #3a3a44;
+      }
+      #padbar .pv-main {
+        display: block;
+      }
+      #padbar .pv-row {
+        display: grid;
+        grid-template-columns: repeat(var(--keys, 8), minmax(0, 1fr));
+        gap: 5px;
+      }
+      .pv-btn {
+        --glow: #ffffff;
+        position: relative;
+        height: 54px;
+        min-width: 0;
+        padding: 0;
+        border-radius: 10px;
+        border: 1.5px solid var(--pv-key-edge, rgba(255,255,255,.14));
+        background: #000;
+        overflow: hidden;
+        box-shadow: 0 2px 0 #050507;
+        transition: transform 50ms ease, box-shadow 120ms ease, border-color 120ms ease;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+      }
+      .pv-btn canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .pv-btn.lit {
+        border-color: var(--glow);
+        box-shadow: 0 2px 0 #050507, 0 0 12px color-mix(in srgb, var(--glow) 75%, transparent);
+      }
+      .pv-btn.down {
+        transform: translateY(2px);
+        box-shadow: 0 0 0 #050507;
+      }
+      #padbar .pv-btn[data-role="stake"] {
+        border-color: rgba(242, 183, 5, 0.6);
+      }
+      #padbar .pv-btn[data-role="start"] {
+        border-color: var(--pv-start);
+        box-shadow: 0 2px 0 #5a060c, 0 0 0 1px var(--pv-start);
+      }
+      #padbar .pv-btn[data-role="start"].lit {
+        box-shadow: 0 2px 0 #5a060c, 0 0 14px rgba(255, 70, 80, 0.8);
+      }
+      /* Feature buttons pop up over the bottom of the machine while lit. */
+      .pv-feature {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        z-index: 5;
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px;
+        border-radius: 14px;
+        background: rgba(8, 8, 10, 0.72);
+        backdrop-filter: blur(6px);
+        animation: pv-pop 160ms ease-out;
+      }
+      .pv-feature[hidden] {
+        display: none;
+      }
+      .pv-feature .pv-btn {
+        flex: 1 1 0;
+        max-width: 120px;
+        height: 54px;
+      }
+      @keyframes pv-pop {
+        from { transform: translateY(12px); opacity: 0; }
+      }
+      #padbar .pv-coin span:last-child {
+        white-space: nowrap;
+      }
+      /* While a machine is up the page is exactly one screen: the stage takes
+         what the controls leave, so nothing is pushed off the bottom. */
+      html:has(#stage:not([hidden])),
+      html:has(#stage:not([hidden])) body {
+        height: 100%;
+        overflow: hidden;
+      }
+      body:has(#stage:not([hidden])) {
+        min-height: 0;
+        padding: 0;
+        gap: 0;
+        box-sizing: border-box;
+      }
+      @media (orientation: landscape) and (max-height: 560px) {
+        #padbar {
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          width: 232px;
+          z-index: 5;
+          overflow-y: auto;
+          gap: 6px;
+          padding: calc(8px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) 10px;
+          border-top: 0;
+          border-left: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        body:has(#padbar:not([hidden])) #stage {
+          width: calc(100% - 232px);
+          align-self: flex-start;
+        }
+        #padbar .pv-top {
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        #padbar .pv-coin {
+          flex: 1 1 100%;
+          justify-content: center;
+        }
+        #padbar .pv-seg {
+          margin-left: 0;
+          flex: 1 1 auto;
+        }
+        #padbar .pv-zoom {
+          flex: 1 1 100%;
+        }
+        #padbar .pv-zoom button {
+          flex: 1 1 0;
+        }
+        #padbar .pv-zoom .pv-menu {
+          display: block;
+          font-size: 15px;
+        }
+        #padbar .pv-main {
+          flex-direction: column;
+          flex: 1 1 auto;
+        }
+        #padbar .pv-row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          align-content: start;
+        }
+        #padbar .pv-btn[data-role="start"] {
+          grid-column: 1 / -1;
+        }
+        #padbar .pv-btn {
+          height: 40px;
+        }
       }
       #stage {
         width: 100%;
@@ -1200,7 +1457,7 @@
     <header>
       <button id="burgerBtn" class="iconbtn" hidden aria-label="Engineer menu" data-str-aria-label="index.engineer_menu"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div class="brand">
-        <h1><img class="logo-img" src="/icons/fruitulator-cherries.svg?v=1" alt="Fruitulator"  data-str-alt="index.fruitulator"/></h1>
+        <h1><img class="logo-img" src="./icons/reel-pocket-logo.svg?v=1" alt="Reel Pocket"  data-str-alt="index.fruitulator"/></h1>
         <p class="tagline" data-str="index.fruit_machine_emulator">Fruit Machine Emulator</p>
       </div>
       <div class="tools">
@@ -1210,7 +1467,7 @@
       <span id="offlineNote" hidden></span>
       <button id="to-library" class="iconbtn" type="button" aria-label="Open the library" title="Library" data-str-title="index.library" data-str-aria-label="index.open_the_library"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4v16M8 8v12M12 6v14M16 6l4 14"/></svg></button>
       <button id="to-orbit" class="iconbtn" type="button" hidden aria-label="Back to the carousel" title="Home" data-str-title="index.home" data-str-aria-label="index.back_to_the_carousel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></button>
-      <button id="aboutBtn" class="iconbtn upload about" aria-label="About Fruitulator" aria-haspopup="dialog" aria-expanded="false" data-str-aria-label="index.about_fruitulator"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-5"/><path d="M12 7.8h.01"/></svg></button>
+      <button id="aboutBtn" class="iconbtn upload about" aria-label="About Reel Pocket" aria-haspopup="dialog" aria-expanded="false" data-str-aria-label="index.about_fruitulator"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-5"/><path d="M12 7.8h.01"/></svg></button>
       </div>
       <div class="game-only" id="soundGroup" hidden>
         <button id="schemBtn" class="iconbtn" hidden aria-label="System status" aria-pressed="false" data-str-aria-label="index.system_status"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2.5 12h4.2l3-7.5 4.6 15 3-7.5h4.2"/></svg></button>
@@ -1253,7 +1510,7 @@
     <div id="schemBackdrop" hidden></div>
     <div id="schemPanel" hidden role="dialog" aria-modal="true" aria-label="System status" data-str-aria-label="index.system_status"></div>
     <nav id="menu" hidden>
-      <div class="menu-brand"><img class="logo-img" src="/icons/fruitulator-cherries.svg?v=1" alt="Fruitulator"  data-str-alt="index.fruitulator"/><p class="tagline" data-str="index.fruit_machine_emulator">Fruit Machine Emulator</p></div>
+      <div class="menu-brand"><img class="logo-img" src="./icons/reel-pocket-logo.svg?v=1" alt="Reel Pocket"  data-str-alt="index.fruitulator"/><p class="tagline" data-str="index.fruit_machine_emulator">Fruit Machine Emulator</p></div>
       <input id="volSlider" type="range" min="0" max="100" value="80" aria-label="Volume"  data-str-aria-label="index.volume"/>
       <input id="brightSlider" type="range" min="40" max="160" value="100" aria-label="Brightness"  data-str-aria-label="index.brightness"/>
       <div id="menuBody"><div id="menuContent"></div><div id="menuSub"></div></div>
@@ -1338,6 +1595,7 @@
       <button id="soundnote-close" type="button" aria-label="Dismiss" data-str-aria-label="index.dismiss">×</button>
     </div>
     <div id="stage" hidden><canvas id="screen" width="800" height="480"></canvas></div>
+    <div id="padbar" hidden></div>
     <script type="module" src="/web/boot.ts"></script>
   </body>
 </html>

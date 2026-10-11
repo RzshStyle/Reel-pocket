@@ -4,7 +4,7 @@ import {
   type GameMeta,
 } from './store';
 import { localStateStore } from './statestore';
-import { parseTitle } from './title';
+import { parseTitle, titleSource } from './title';
 import { enhanceSelect } from './ui/dropdown';
 import { clearArtwork, fillArtwork, hasArtwork, releaseArtwork, showTile } from './ui/art';
 import { chip } from './ui/list';
@@ -353,13 +353,46 @@ function openStorageSheet(
   showSheet(str('library.storage'), [info, exp, del], returnTo);
 }
 
+// Lay a real file input over the row so a tap opens the picker directly:
+// embedded viewers can refuse a script-driven click on a hidden input.
+function directPick(
+  row: HTMLButtonElement, which: 'folder' | 'files',
+  pick: (which: 'folder' | 'files', direct?: boolean) => void,
+): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'sheet-pick';
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  if (which === 'folder') input.webkitdirectory = true;
+  input.className = 'sheet-pick-input';
+  input.setAttribute('aria-label', row.textContent ?? '');
+  const target = (): HTMLInputElement =>
+    document.getElementById(which === 'folder' ? 'folder' : 'zipfile') as HTMLInputElement;
+  input.addEventListener('click', () => pick(which, true));
+  input.addEventListener('change', () => {
+    closeSheet();
+    const t = target();
+    t.files = input.files;
+    t.dispatchEvent(new Event('change'));
+  });
+  input.addEventListener('cancel', () => {
+    closeSheet();
+    target().dispatchEvent(new Event('cancel'));
+  });
+  wrap.append(row, input);
+  return wrap;
+}
+
 export async function openAddSheet(
-  returnTo: HTMLElement, pick: (which: 'folder' | 'files') => void,
+  returnTo: HTMLElement, pick: (which: 'folder' | 'files', direct?: boolean) => void,
 ): Promise<void> {
-  const folder = sheetRow(str('library.game_folder'), str('library.one_game_s_folder_or'));
-  folder.addEventListener('click', () => { closeSheet(); pick('folder'); });
-  const files = sheetRow(str('library.zip_punnet_files'), str('library.one_or_several_as_they'));
-  files.addEventListener('click', () => { closeSheet(); pick('files'); });
+  const folderRow = sheetRow(str('library.game_folder'), str('library.one_game_s_folder_or'));
+  folderRow.addEventListener('click', () => { closeSheet(); pick('folder'); });
+  const folder = directPick(folderRow, 'folder', pick);
+  const filesRow = sheetRow(str('library.zip_punnet_files'), str('library.one_or_several_as_they'));
+  filesRow.addEventListener('click', () => { closeSheet(); pick('files'); });
+  const files = directPick(filesRow, 'files', pick);
 
   let count = 0;
   try {
@@ -405,13 +438,13 @@ function renameField(g: GameMeta, h: LibraryHandlers): HTMLElement {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = displayTitle(g);
-  input.placeholder = parseTitle(g.sourceName ?? g.name).title;
+  input.placeholder = parseTitle(titleSource(g)).title;
   input.setAttribute('aria-label', str('library.game_title'));
   selectAllOnFocus(input);
 
   const commit = () => {
     const next = input.value.trim();
-    const parsed = parseTitle(g.sourceName ?? g.name).title;
+    const parsed = parseTitle(titleSource(g)).title;
     const value = next === parsed ? '' : next;
     if ((g.title ?? '') === value) return;
     h.onRename(g.hash, value);

@@ -72,7 +72,9 @@ import {
 import { deflateSync, strToU8 } from 'fflate';
 import { parseTitle } from './title';
 import { layoutPoint, pickControl } from './cabhit';
-import { viewFor, acceptorResolve, stampCoinInputs, type PlatformView } from './platform';
+import { PhoneView } from './phoneview';
+import { controlNaming } from './controlname';
+import { viewFor, acceptorResolve, acceptorTakesToken, stampCoinInputs, type PlatformView } from './platform';
 import { virtualDisplayReversed } from '../src/machine/layoutdisplay';
 import {
   reelEffectivePosition,
@@ -104,7 +106,7 @@ import {
   HOVER_POINTER_QUERY, Magnifier, hasHoverPointer, magnifierZoom, setMagnifierZoom,
   wheelPixels, wheelStep,
 } from './magnifier';
-import { platformReelOffsetSteps, platformRequiresReversal, reelIndex } from './render-index';
+import { cabLampLit, platformReelOffsetSteps, platformRequiresReversal, reelIndex } from './render-index';
 import { str, applyStrings } from './i18n';
 
 applyStrings();
@@ -169,9 +171,54 @@ const busyCovers = [
   document.getElementById('statusbar') as HTMLElement,
 ];
 
+// When a machine takes too long to start, say what it is waiting on, so a
+// phone that stalls can be diagnosed from a screenshot.
+const bootLog: string[] = [];
+for (const level of ['log', 'warn', 'error'] as const) {
+  const orig = console[level].bind(console);
+  console[level] = (...args: unknown[]): void => {
+    bootLog.push(`${level[0]} ${args.map(String).join(' ')}`.slice(0, 140));
+    if (bootLog.length > 8) bootLog.shift();
+    orig(...args);
+  };
+}
+addEventListener('error', (e) => console.error(`uncaught: ${e.message}`));
+addEventListener('unhandledrejection', (e) => console.error(`rejected: ${String(e.reason)}`));
+const bootDiag = { since: 0, stage: '' };
+let bootDiagTimer = 0;
+function paintBootDiag(): void {
+  let pre = document.getElementById('bootDiag');
+  if (!busy.classList.contains('show')) { pre?.remove(); clearInterval(bootDiagTimer); bootDiagTimer = 0; return; }
+  const secs = Math.round((performance.now() - bootDiag.since) / 1000);
+  if (secs < 6) return;
+  if (!pre) {
+    pre = document.createElement('pre');
+    pre.id = 'bootDiag';
+    pre.style.cssText = 'margin:12px 0 0;max-width:100%;white-space:pre-wrap;font:10px/1.35 monospace;color:#9a9aa5;text-align:left;overflow-wrap:anywhere';
+    document.getElementById('busyBox')!.append(pre);
+  }
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  pre.textContent = [
+    `${secs}s · ${bootDiag.stage} · frames ${(emu as unknown as { framesReceived?: () => number }).framesReceived?.() ?? '?'}`
+      + ` · cabinet ${awaitingCabinet ? 'waiting' : cabinet ? 'ready' : 'none'} · mem ${nav.deviceMemory ?? '?'}GB`,
+    ...bootLog,
+  ].join('\n');
+}
+
 function showBusy(msg: string): void {
   if (!errorPopup.hidden) return;
   setBusyMsg(msg);
+  bootDiag.stage = msg.replace(/…$/, '');
+  if (!busy.classList.contains('show')) bootDiag.since = performance.now();
+  if (!bootDiagTimer) bootDiagTimer = window.setInterval(paintBootDiag, 2000);
+  let tag = document.getElementById('bootTag');
+  if (!tag) {
+    tag = document.createElement('div');
+    tag.id = 'bootTag';
+    tag.style.cssText = 'margin-top:8px;font:10px monospace;color:#6c6c76';
+    tag.textContent = 'test build 20';
+    document.getElementById('busyBox')!.append(tag);
+  }
   busy.classList.add('show');
   for (const el of busyCovers) el.inert = true;
 }
@@ -2261,6 +2308,7 @@ function frame(now: number): void {
     screenDirty = true;
   }
   presentScreen();
+  phoneView.frame();
   magnifier.present();
   if (BENCH) benchSample(t0);
   screenStalls.charge('drawing the machine', tDraw);
@@ -2346,7 +2394,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   });
   navigator.serviceWorker.startMessages();
   const register = (): void => {
-    void navigator.serviceWorker.register('/sw.js')
+    void navigator.serviceWorker.register('./sw.js')
       .then(() => navigator.serviceWorker.ready)
       .then(() => reportAssets())
       .catch((e: Error) => console.warn('[fruitulator] service worker not registered', e.message));
@@ -2372,7 +2420,10 @@ function forceRedraw(): void {
   if (v) draw(v);
 }
 
+let lastFrame: FrameView | null = null;
+
 function draw(m: FrameView): void {
+  lastFrame = m;
   effects.frame(m);
   const cab = cabinet;
   if (!cab) {
@@ -2551,8 +2602,10 @@ let drag: { x: number; y: number; panX: number; panY: number; moved: boolean } |
 
 function clampPan(): void {
   const s = stage.getBoundingClientRect();
-  const maxX = Math.max(0, (screenEl.offsetWidth * zoom - s.width) / 2);
-  const maxY = Math.max(0, (screenEl.offsetHeight * zoom - s.height) / 2);
+  // Content smaller than the stage may still slide within it, so a framing
+  // can leave its blank space on one side.
+  const maxX = Math.abs(screenEl.offsetWidth * zoom - s.width) / 2;
+  const maxY = Math.abs(screenEl.offsetHeight * zoom - s.height) / 2;
   panX = Math.min(maxX, Math.max(-maxX, panX));
   panY = Math.min(maxY, Math.max(-maxY, panY));
 }
@@ -2694,7 +2747,14 @@ function componentPan(z: number): { x: number; y: number } {
   };
 }
 
+let phoneReframe: (() => void) | null = null;
+
 function resetView(): void {
+  if (phoneReframe) {
+    measureFit();
+    phoneReframe();
+    return;
+  }
   zoom = 1;
   panX = 0;
   panY = 0;
@@ -2747,6 +2807,39 @@ function updatePinch(): void {
 }
 
 const pointerHost: HTMLElement = stage;
+const phoneView = new PhoneView({
+  stage,
+  bar: document.getElementById('padbar') as HTMLElement,
+  canvas,
+  cabinet: () => cabinet,
+  screenSize: () => ({ w: screenEl.offsetWidth, h: screenEl.offsetHeight }),
+  getView: () => ({ zoom, panX, panY }),
+  setView: (z, x, y) => { zoom = z; panX = x; panY = y; applyView(); },
+  maxZoom: MAX_ZOOM,
+  nameOf: (lp) => {
+    const view = viewFor(session.game?.system ?? '');
+    return controlNaming(lp, view, emu.info?.coins ?? view.coins, emu.info?.capNames, emu.info?.coinPort).label;
+  },
+  isControlAt: (x, y) => !!cabinetHit(x, y),
+  isLit: (lp) => {
+    const m = lastFrame;
+    if (!m) return null;
+    return lp.states.some((st) => cabLampLit(m, lp, st.n));
+  },
+  takesMoney: (lp) => {
+    if (gatedOff.has(lp)) return 0;
+    const view = viewFor(session.game?.system ?? '');
+    const { line, kind } = acceptorResolve(view, lp, emu.info?.coins, emu.info?.coinPort);
+    if (line < 0) return 0;
+    // The phone Credit button puts in a cash coin like a player would; a note slot is the
+    // fallback, and a token slot the last resort (tokens leave the payout figure blank).
+    if (acceptorTakesToken(view, lp, line, emu.info?.coins)) return 1;
+    return kind === 'note' ? 2 : 3;
+  },
+  press: (lp, id) => activate(lp, id),
+  release: (id) => releaseInput(id),
+});
+phoneReframe = () => phoneView.reframe();
 
 pointerHost.addEventListener('contextmenu', (ev) => ev.preventDefault());
 for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
@@ -3462,14 +3555,14 @@ const fromUrl = new URLSearchParams(location.search).get('fromUrl');
 if (fromUrl) loadFromUrl(fromUrl);
 
 const addBtn = document.getElementById('addBtn') as HTMLButtonElement;
-function openPicker(which: 'folder' | 'files'): void {
+function openPicker(which: 'folder' | 'files', direct = false): void {
   status.textContent = str('main.waiting_for_the_picker');
   traceReset();
   trace(`picker opened: ${which}`);
   markPickerOpen(true);
   pickerGen = pickGen;
   armPickerWait(which);
-  (which === 'folder' ? picker : zipPicker).click();
+  if (!direct) (which === 'folder' ? picker : zipPicker).click();
 }
 
 let pickerGen = 0;

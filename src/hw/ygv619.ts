@@ -18,6 +18,8 @@ export function ygvColour(w: number): number {
 }
 
 export class Ygv619 {
+  // Screen size comes from the layout, not the save: a save taken at another size must not resize the chip.
+  static readonly snapshotConfig: readonly string[] = ['width', 'height'];
   readonly vram = new Uint16Array(VRAM_BYTES / 2);
   frame: Uint32Array;
   frameSerial = 0;

@@ -1,3 +1,14 @@
+# Reel Pocket
+
+Reel Pocket is a phone-first fruit machine emulator. It is built on
+[Fruitulator](https://github.com/fruitulator/emulator) (BSD licence, see
+`LICENSE`), with a phone layout and thumb buttons (`web/phoneview.ts`),
+Reel Pocket branding, and fixes for large Bellfruit Adder 5 video games.
+
+Never commit game ROMs, layouts or sound files to this repository.
+
+The rest of this file is Fruitulator's own README.
+
 # Fruitulator
 
 Fruitulator is a fruit machine emulator that runs in a web browser. It plays

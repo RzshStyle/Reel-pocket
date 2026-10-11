@@ -2124,6 +2124,8 @@ function finishScorpion5(game: Game, m: Sc5): Sc5 {
     return m;
 }
 
+const LANDSCAPE_MODE = 3;
+
 function fitSc5Video(game: Game, m: Sc5): void {
   const screens = [{ width: 600, height: 800 }, { width: 600, height: 800 }];
   const layout = decodedLayout(game.layout);
@@ -2132,7 +2134,10 @@ function fitSc5Video(game: Game, m: Sc5): void {
     if (c.type !== 0x1f) continue;
     declared = true;
     if (c.number !== 0 && c.number !== 1) continue;
-    screens[c.number] = adder5ScreenSize(c.values.get('VideoMode') ?? -1) ?? screens[c.number];
+    // Without a declared mode, follow the shape of the screen on the glass:
+    // a landscape window holds a landscape monitor.
+    const mode = c.values.get('VideoMode') ?? (c.width > c.height ? LANDSCAPE_MODE : -1);
+    screens[c.number] = adder5ScreenSize(mode) ?? screens[c.number];
   }
   if (game.system !== 'ADDER5' && !declared) return;
   m.fitAdder5(screens[0].width, screens[0].height, screens[1].width, screens[1].height);

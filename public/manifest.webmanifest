@@ -1,6 +1,6 @@
 {
-  "name": "fruitulator - fruit machine emulator",
-  "short_name": "fruitulator",
+  "name": "Reel Pocket - fruit machine emulator",
+  "short_name": "Reel Pocket",
   "description": "Play cached UK fruit machine layouts in the browser.",
   "id": "/",
   "start_url": "/",

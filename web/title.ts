@@ -94,3 +94,11 @@ export function parseTitle(source: string): CardTitle {
 
   return { title: title || raw.replace(ARCHIVE_EXT, ''), chips, raw };
 }
+
+// Folder and zip names like "Games" or "MFME" say where a game was kept, not what it is.
+const GENERIC_SOURCE = /^(my )?(games?|mfme( ?\d+(\.\d+)*)?( games?| layouts?)?|layouts?|roms?|fruit ?machines?|fruities ?\d*|fruits?|machines?|emulators?|new folder( ?\(\d+\))?|downloads?|desktop|documents|files?|archive|backup|temp|tmp)$/i;
+
+export function titleSource(g: { sourceName?: string; name: string }): string {
+  const src = g.sourceName?.replace(ARCHIVE_EXT, '').trim();
+  return src && !GENERIC_SOURCE.test(src) ? g.sourceName! : g.name;
+}

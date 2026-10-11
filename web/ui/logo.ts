@@ -1,5 +1,5 @@
 import { str } from '../i18n';
-export const LOGO_SRC = '/icons/fruitulator-cherries.svg?v=1';
+export const LOGO_SRC = './icons/reel-pocket-logo.svg?v=1';
 
 export function makeLogo(className = 'logo-img'): HTMLImageElement {
   const img = document.createElement('img');

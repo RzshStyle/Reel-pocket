@@ -102,7 +102,7 @@ function el(doc: Document, tag: string, cls: string, text?: string): HTMLElement
 function fill(doc: Document, into: HTMLElement, heading: string, paras: GatePara[]): void {
   const mark = doc.createElement('img');
   mark.className = 'agegate-mark';
-  mark.src = '/icons/18plus.svg';
+  mark.src = './icons/18plus.svg';
   mark.width = 88;
   mark.height = 88;
   mark.alt = GATE_COPY.markAlt;

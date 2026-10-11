@@ -39,6 +39,8 @@ interface Exports {
   stepOne(): number;
 }
 
+const MAX_CODE_WORDS = 2 * 1024 * 1024;
+
 export class ColdfireWasm {
   private readonly ex: Exports;
   readonly d: Uint32Array<ArrayBuffer>;
@@ -87,7 +89,11 @@ export class ColdfireWasm {
     this.ex = instance.exports as unknown as Exports;
     this.ex._start();
 
-    const nWords = opts.romBytes.length >> 1;
+    // Decode tables cost 15 bytes per ROM word. Video boards carry 16MB
+    // ROMs that are mostly graphics, and tables for all of it would not fit
+    // a phone's memory, so only the first part is decoded; code beyond it
+    // runs on the interpreter.
+    const nWords = Math.min(opts.romBytes.length >> 1, MAX_CODE_WORDS);
     const sramSize = opts.sramSize ?? 0;
     const total = this.ex.configure(
       opts.codeBase >>> 0, nWords, opts.romBytes.length, opts.ramBase >>> 0, opts.ramSize, sramSize,

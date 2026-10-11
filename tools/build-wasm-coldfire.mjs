@@ -11,7 +11,7 @@ execFileSync(asc, [
   '--runtime', 'stub',
   '-O', '--noAssert',
   '--initialMemory', '4',
-  '--maximumMemory', '1024',
+  '--maximumMemory', '4096',
   '--exportStart', '_start',
 ], { cwd: root, stdio: 'inherit' });
 
