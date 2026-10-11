@@ -24,6 +24,7 @@ const FEATURE_HOLD_MS = 1600;
 const GLIDE_MS = 350;
 // Height Auto keeps free under the machine for the feature keys.
 const STRIP_PX = 78;
+const MAX_FLAT_ZOOM = 1.4;
 // Attract mode flashes every lamp on the glass; feature keys only pop up
 // while someone is actually playing.
 const PLAYING_MS = 90_000;
@@ -182,6 +183,7 @@ export class PhoneView {
   // Flat view: the top glass and the reel glass, in canvas pixels, and where
   // each is drawn on the stage (CSS pixels).
   private flatSrc: { top: Rect; bottom: Rect } | null = null;
+  private flatCut: { top: Rect; bottom: Rect } | null = null;
   private flatDst: { top: Rect; bottom: Rect } | null = null;
   private flatCv = el('canvas', 'pv-flat');
   private glide: { from: { zoom: number; panX: number; panY: number }; to: { zoom: number; panX: number; panY: number }; t0: number } | null = null;
@@ -288,6 +290,7 @@ export class PhoneView {
     this.feature.hidden = true;
     this.host.bar.hidden = true;
     this.flatSrc = null;
+    this.flatCut = null;
     this.flatDst = null;
     this.showFlat(false);
   }
@@ -394,12 +397,18 @@ export class PhoneView {
     if (!src || sw <= 0 || sh <= 0) { this.flatDst = null; return; }
     const room = sh - (this.extras.length ? STRIP_PX : 0);
     const gap = 3;
-    let st = sw / src.top.width, sb = sw / src.bottom.width;
-    const total = src.top.height * st + src.bottom.height * sb + gap;
-    if (total > room) { const f = (room - gap) / (total - gap); st *= f; sb *= f; }
-    const ht = src.top.height * st, hb = src.bottom.height * sb;
+    // Fit both halves to the phone width, then zoom in to use the spare
+    // height, trimming the sides equally (at most MAX_FLAT_ZOOM).
+    const ht0 = src.top.height * sw / src.top.width, hb0 = src.bottom.height * sw / src.bottom.width;
+    const f = Math.min(MAX_FLAT_ZOOM, (room - gap) / (ht0 + hb0));
+    const cut = (r: Rect): Rect => {
+      const w = f > 1 ? r.width / f : r.width;
+      return { left: r.left + (r.width - w) / 2, top: r.top, width: w, height: r.height };
+    };
+    this.flatCut = { top: cut(src.top), bottom: cut(src.bottom) };
+    const ht = ht0 * f, hb = hb0 * f;
+    const wt = f > 1 ? sw : sw * f, wb = wt;
     const y0 = Math.max(0, room - (ht + gap + hb)) / 2;
-    const wt = src.top.width * st, wb = src.bottom.width * sb;
     this.flatDst = {
       top: { left: (sw - wt) / 2, top: y0, width: wt, height: ht },
       bottom: { left: (sw - wb) / 2, top: y0 + ht + gap, width: wb, height: hb },
@@ -410,7 +419,7 @@ export class PhoneView {
   }
 
   private drawFlat(): void {
-    const d = this.flatDst, s = this.flatSrc;
+    const d = this.flatDst, s = this.flatCut;
     if (!d || !s) return;
     const ctx = this.flatCv.getContext('2d');
     if (!ctx) return;
@@ -438,7 +447,7 @@ export class PhoneView {
   // Where a touch on the flat view lands on the real cabinet canvas, as a
   // client point on that canvas, or null if it falls between the halves.
   unflatten(clientX: number, clientY: number): { x: number; y: number } | null {
-    const d = this.flatDst, s = this.flatSrc;
+    const d = this.flatDst, s = this.flatCut;
     if (!this.flatActive || !d || !s) return null;
     const st = this.host.stage.getBoundingClientRect();
     const x = clientX - st.left, y = clientY - st.top;
