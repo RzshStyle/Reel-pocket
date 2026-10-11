@@ -827,11 +827,12 @@ export class PhoneView {
       }
     }
     this.showFlat(false);
-    // Flat falls back to Auto where it can't stack the machine (landscape,
-    // or no clear top glass and reel panel).
+    // Flat falls back to Auto where it can't stack the machine but Auto
+    // can fit it to a tall screen (no clear top glass and reel panel).
     if (this.mode !== 'whole' && this.autoFrame(glide)) return;
     this.feature.style.bottom = '';
-    this.frameRegion(this.mode === 'whole' ? this.whole : this.play ?? this.whole, glide);
+    // Flat that can't stack (a wide screen) shows the whole machine.
+    this.frameRegion(this.mode === 'auto' ? this.play ?? this.whole : this.whole, glide);
   }
 
   // Auto fits the machine to the phone: as big as the reels, display and
