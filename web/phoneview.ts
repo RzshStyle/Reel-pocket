@@ -24,7 +24,6 @@ const FEATURE_HOLD_MS = 1600;
 const GLIDE_MS = 350;
 // Height Auto keeps free under the machine for the feature keys.
 const STRIP_PX = 78;
-const MAX_FLAT_ZOOM = 1.4;
 // Attract mode flashes every lamp on the glass; feature keys only pop up
 // while someone is actually playing.
 const PLAYING_MS = 90_000;
@@ -366,26 +365,73 @@ export class PhoneView {
   private flatRegions(cab: Cabinet, reels: Rect[], vfd: Rect[], deck: Rect[], capH: number): { top: Rect; bottom: Rect } | null {
     const c = cab.content;
     const whole = this.whole!;
-    const reelBox = union(reels);
+    // The main reels: the biggest ones, in the lowest row. Dice and small
+    // feature reels on the top glass belong to the top half.
+    const maxH = Math.max(0, ...reels.map((r) => r.height));
+    const big = reels.filter((r) => r.height >= maxH * 0.6);
+    const lowest = Math.max(-Infinity, ...big.map((r) => r.top + r.height / 2));
+    const reelBox = union(big.filter((r) => r.top + r.height / 2 >= lowest - maxH * 0.5));
     if (!reelBox) return null;
+    // A display sitting just above the reels starts the reel panel.
+    const above = vfd.filter((v) => v.top < reelBox.top && reelBox.top - v.top < maxH * 1.5);
+    const panelTop = Math.min(reelBox.top, ...above.map((v) => v.top));
     const art = cab.lamps
       .filter((lp) => lp.width > 4 && lp.height > 4 && lp.states.length > 0)
       .map((lp) => ({ left: lp.left - c.left, top: lp.top - c.top, width: lp.width, height: lp.height }))
       .filter((r) => r.left >= 0 && r.top >= 0 && r.left + r.width <= whole.width && r.top + r.height <= whole.height);
     const glass = union([...art, ...reels, ...vfd, ...deck]);
     if (!glass) return null;
+    const split = this.findSplit(art, glass, panelTop, capH);
+    // Each half is framed on its own: the top glass and the reel panel are
+    // often drawn at different widths and angles, so one shared crop would
+    // cut into one or leave cabinet showing on the other.
+    const mid = (r: Rect): number => r.top + r.height / 2;
+    const upper = art.filter((r) => mid(r) < split);
+    const below = [...art.filter((r) => mid(r) >= split), ...reels, ...vfd, ...deck];
     const pad = capH * 0.3;
-    const left = Math.max(0, glass.left - pad);
-    const right = Math.min(whole.width, glass.left + glass.width + pad);
-    const split = Math.max(glass.top + capH, reelBox.top - capH * 1.6);
+    const frame = (rs: Rect[], top: number, bottom: number): Rect | null => {
+      const u = union(rs);
+      if (!u) return null;
+      const left = Math.max(0, u.left - pad);
+      const right = Math.min(whole.width, u.left + u.width + pad);
+      return { left, top, width: right - left, height: bottom - top };
+    };
     const deckBottom = deck.length ? Math.max(...deck.map((r) => r.top + r.height)) : reelBox.top + reelBox.height;
     const bottomEnd = Math.min(whole.height, Math.max(deckBottom, reelBox.top + reelBox.height) + pad);
-    const top = Math.max(0, glass.top - pad);
-    if (split - top < capH * 2) return null;
-    return {
-      top: { left, top, width: right - left, height: split - top },
-      bottom: { left, top: split, width: right - left, height: bottomEnd - split },
-    };
+    const topStart = Math.max(0, glass.top - pad);
+    if (split - topStart < capH * 2) return null;
+    const top = frame(upper, topStart, split);
+    const bottom = frame(below, split, bottomEnd);
+    return top && bottom ? { top, bottom } : null;
+  }
+
+  // Where the top glass ends and the reel panel begins. Machines differ,
+  // so read it from the layout: the widest band of rows that no lamp art
+  // crosses, between a third of the way down the glass and the reel panel. With
+  // no clear band, fall back to just above the reels.
+  private findSplit(art: Rect[], glass: Rect, panelTop: number, capH: number): number {
+    const lo = glass.top + (panelTop - glass.top) / 3;
+    const hi = panelTop;
+    const fallback = Math.max(glass.top + capH, panelTop - capH * 0.6);
+    if (hi <= lo) return fallback;
+    // Ignore small lamps (single bulbs, arrows) and tall side columns
+    // such as prize ladders that run down both glasses.
+    const span = glass.height;
+    const blocks = art.filter((r) => r.height < span * 0.35 && r.width * r.height > capH * capH * 0.5);
+    const rows = Math.ceil(hi - lo);
+    const used = new Uint8Array(rows);
+    for (const r of blocks) {
+      const a = Math.max(0, Math.floor(r.top - lo)), b = Math.min(rows, Math.ceil(r.top + r.height - lo));
+      for (let y = a; y < b; y++) used[y] = 1;
+    }
+    let best = -1, bestLen = 0, run = 0;
+    for (let y = 0; y <= rows; y++) {
+      if (y < rows && !used[y]) { run++; continue; }
+      // Prefer bands nearer the reels when they are about as wide.
+      if (run > 0 && run >= bestLen * 0.8) { best = y - run / 2; bestLen = run; }
+      run = 0;
+    }
+    return bestLen >= capH * 0.15 ? lo + best : fallback;
   }
 
   // Lay the two halves out on the stage: each as wide as the stage, the
@@ -397,17 +443,14 @@ export class PhoneView {
     if (!src || sw <= 0 || sh <= 0) { this.flatDst = null; return; }
     const room = sh - (this.extras.length ? STRIP_PX : 0);
     const gap = 3;
-    // Fit both halves to the phone width, then zoom in to use the spare
-    // height, trimming the sides equally (at most MAX_FLAT_ZOOM).
-    const ht0 = src.top.height * sw / src.top.width, hb0 = src.bottom.height * sw / src.bottom.width;
-    const f = Math.min(MAX_FLAT_ZOOM, (room - gap) / (ht0 + hb0));
-    const cut = (r: Rect): Rect => {
-      const w = f > 1 ? r.width / f : r.width;
-      return { left: r.left + (r.width - w) / 2, top: r.top, width: w, height: r.height };
-    };
-    this.flatCut = { top: cut(src.top), bottom: cut(src.bottom) };
-    const ht = ht0 * f, hb = hb0 * f;
-    const wt = f > 1 ? sw : sw * f, wb = wt;
+    // Each half fills the width on its own scale; if together they are
+    // too tall, both shrink by the same factor.
+    let st = sw / src.top.width, sb = sw / src.bottom.width;
+    const total = src.top.height * st + src.bottom.height * sb;
+    if (total > room - gap) { const f = (room - gap) / total; st *= f; sb *= f; }
+    this.flatCut = src;
+    const ht = src.top.height * st, hb = src.bottom.height * sb;
+    const wt = src.top.width * st, wb = src.bottom.width * sb;
     const y0 = Math.max(0, room - (ht + gap + hb)) / 2;
     this.flatDst = {
       top: { left: (sw - wt) / 2, top: y0, width: wt, height: ht },
