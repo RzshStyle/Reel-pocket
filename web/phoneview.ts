@@ -157,12 +157,16 @@ function friendlyWords(name: string): string {
 
 // Touch screens (phones, tablets) start in Flat; computers with a mouse
 // start on the whole machine.
-function defaultMode(): ViewMode {
+function touchScreen(): boolean {
   try {
-    return matchMedia('(pointer: coarse)').matches ? 'flat' : 'whole';
+    return matchMedia('(pointer: coarse)').matches;
   } catch {
-    return 'flat';
+    return true;
   }
+}
+
+function defaultMode(): ViewMode {
+  return touchScreen() ? 'flat' : 'whole';
 }
 
 function storedMode(): ViewMode | null {
@@ -814,7 +818,8 @@ export class PhoneView {
 
   // Lit feature buttons pop up as keys in the space under the machine.
   private updateFeature(now: number): void {
-    const playing = now - this.playedAt < PLAYING_MS;
+    // With a mouse the machine's own buttons are easy to hit: no pop-ups.
+    const playing = touchScreen() && now - this.playedAt < PLAYING_MS;
     const live = this.extras.filter((k) => playing && k.litAt > 0 && now - k.litAt < FEATURE_HOLD_MS)
       .sort((a, b) => a.lp.left - b.lp.left);
     const same = live.length === this.shownExtras.length && live.every((k, i) => k === this.shownExtras[i]);
