@@ -7,6 +7,8 @@ const API = 'https://www.googleapis.com/drive/v3/files';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const MAX_DEPTH = 3;
 
+export const DRIVE_CHANGED = 'reelpocket-drive-changed';
+
 export interface DriveConfig { folder: string; key: string }
 
 export interface DriveGame {
@@ -37,6 +39,7 @@ export function saveDriveConfig(c: DriveConfig | null): void {
     if (c) localStorage.setItem(CONFIG_STORE, JSON.stringify(c));
     else localStorage.removeItem(CONFIG_STORE);
   } catch {  }
+  window.dispatchEvent(new Event(DRIVE_CHANGED));
 }
 
 // A link that sets up another device in one tap (website), or can be pasted into the app.

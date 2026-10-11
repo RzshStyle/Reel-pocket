@@ -1,4 +1,7 @@
-import { configFromSetupLink, downloadDriveGame, markFetched, saveDriveConfig, type DriveConfig, type DriveGame } from './drive';
+import {
+  configFromSetupLink, DRIVE_CHANGED, downloadDriveGame, listDriveGames, loadDriveConfig, markFetched,
+  saveDriveConfig, type DriveConfig, type DriveGame,
+} from './drive';
 import { openDriveLibrary } from './drivesheet';
 import {
   classifyGame, linkedInstances, missingProgramRoms, platformFor, type Game,
@@ -68,7 +71,7 @@ import { localStateStore, type StateStore } from './statestore';
 import { currentLayoutProps, isPakBytes } from './gamepak';
 import {
   cancelPendingDelete, closeSheet, commitPendingDeletes, displayTitle, openAddSheet, refreshArtwork,
-  renderLibrary, showNotice, wireLibraryControls, type LibraryHandlers,
+  renderLibrary, setOnlineGames, showNotice, wireLibraryControls, type LibraryHandlers,
   SCREEN_FADE_MS, afterFrames, prefersReducedMotion, settleArtwork,
 } from './library';
 import { deflateSync, strToU8 } from 'fflate';
@@ -744,7 +747,7 @@ function offerPickStop(): void {
   busyStop.disabled = false;
 }
 
-async function importFolderSets(sets: FolderSet[]): Promise<void> {
+async function importFolderSets(sets: FolderSet[], quiet = false): Promise<void> {
   stopBatch = false;
   batchRunning = true;
   const unbusy = holdBusy();
@@ -781,11 +784,12 @@ async function importFolderSets(sets: FolderSet[]): Promise<void> {
           showBusy(str('drive.downloading_n', { 0: parseTitle(archiveStem(set.name)).title || set.name }));
           set = { ...set, entries: await set.fetch() };
         }
+        const setKnown: string[] = [];
         await importFolderSet(set, {
           inFlight, landed, setAdded, trace,
-          known: (hashes) => { known += hashes.length; },
+          known: (hashes) => { known += hashes.length; setKnown.push(...hashes); },
         });
-        set.fetched?.();
+        set.fetched?.([...setAdded, ...setKnown]);
       } catch (e) {
         trace(`failed ${set.name}: ${(e as Error).message || 'import error'}`);
         failed.push({ name: set.name, reason: (e as Error).message || str('main.import_error') });
@@ -830,6 +834,12 @@ async function importFolderSets(sets: FolderSet[]): Promise<void> {
     startArtworkPass();
   }
 
+  // Background fetches from the online library only interrupt when something went wrong.
+  if (quiet && !failed.length && !quota) {
+    if (added) showNotice(str('drive.n_new_games_added', { n: added }));
+    status.textContent = '';
+    return;
+  }
   showImportReport({
     total: sets.length, added, known, unrunnable, silent, failed, orphans,
     quota, stopped: stopBatch && !quota,
@@ -3561,18 +3571,50 @@ function loadFromUrl(raw: string): void {
 const fromUrl = new URLSearchParams(location.search).get('fromUrl');
 if (fromUrl) loadFromUrl(fromUrl);
 
-function importDriveGames(c: DriveConfig, games: DriveGame[]): void {
-  if (batchRunning) return;
+function importDriveGames(c: DriveConfig, games: DriveGame[], quiet = false): Promise<string[]> {
+  if (batchRunning) return Promise.resolve([]);
   dismissError();
-  void importFolderSets(games.map((g) => ({
+  const landed: string[] = [];
+  return importFolderSets(games.map((g) => ({
     dir: g.name,
     name: archiveStem(g.name),
     entries: [],
     zip: true,
     fetch: async () => [await downloadDriveGame(c, g)],
-    fetched: () => markFetched(g),
-  })));
+    fetched: (hashes: string[]) => { markFetched(g); landed.push(...hashes); },
+  })), quiet).then(() => landed);
 }
+
+// Tapping a cloud game downloads it, then starts it.
+function playOnlineGame(g: DriveGame): void {
+  const c = loadDriveConfig();
+  if (!c || batchRunning) return;
+  void importDriveGames(c, [g], true).then((hashes) => {
+    if (hashes.length === 1) libraryHandlers.onOpen(hashes[0], false);
+  });
+}
+
+// The library lists the online library's games as soon as the app opens or comes
+// back to the front; nothing downloads until a game is tapped.
+let driveCheckedAt = 0;
+async function refreshOnlineGames(force = false): Promise<void> {
+  const c = loadDriveConfig();
+  if (!c) {
+    setOnlineGames([], playOnlineGame);
+    return;
+  }
+  if (document.hidden || (!force && Date.now() - driveCheckedAt < 60_000)) return;
+  driveCheckedAt = Date.now();
+  try {
+    setOnlineGames(await listDriveGames(c), playOnlineGame);
+  } catch (e) {
+    console.warn('[drive] library check failed', e);
+    return;
+  }
+  if (!librarySection.hidden && !batchRunning) await renderLibrary(libraryHandlers);
+}
+document.addEventListener('visibilitychange', () => void refreshOnlineGames());
+window.addEventListener(DRIVE_CHANGED, () => void refreshOnlineGames(true));
 
 const addBtn = document.getElementById('addBtn') as HTMLButtonElement;
 function openPicker(which: 'folder' | 'files', direct = false): void {
@@ -3620,7 +3662,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function openAdd(ev: Event): void {
   const from = ev.currentTarget as HTMLElement;
-  void openAddSheet(from, openPicker, () => void openDriveLibrary(from, importDriveGames));
+  void openAddSheet(from, openPicker, () => void openDriveLibrary(from, (c, games) => void importDriveGames(c, games)));
 }
 addBtn.addEventListener('click', openAdd);
 document.getElementById('emptyAdd')!.addEventListener('click', openAdd);
@@ -3665,11 +3707,13 @@ reportInterruptedImport();
 startFrameLoop();
 
 // A setup link (?library=<folder>&key=<key>) connects this device to the online library.
+// Either way the library then lists the online games.
 {
   const setup = configFromSetupLink(location.href);
   if (setup) {
-    saveDriveConfig(setup);
     history.replaceState(null, '', location.pathname);
-    void openDriveLibrary(addBtn, importDriveGames);
+    saveDriveConfig(setup);
+  } else {
+    void refreshOnlineGames(true);
   }
 }

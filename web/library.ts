@@ -7,7 +7,9 @@ import { localStateStore } from './statestore';
 import { parseTitle, titleSource } from './title';
 import { enhanceSelect } from './ui/dropdown';
 import { clearArtwork, fillArtwork, hasArtwork, releaseArtwork, showTile } from './ui/art';
-import { chip } from './ui/list';
+import { chip, sectionHeading, tileCard, tileGrid } from './ui/list';
+import { artwork } from './ui/art';
+import { isFetched, type DriveGame } from './drive';
 import {
   activity, displayTitle, gridArrowNav, mountGameList, systemLabel,
   type GameList, type SortKey,
@@ -141,6 +143,50 @@ function orbitDeps(h: LibraryHandlers): OrbitDeps {
   };
 }
 
+// Games in the online library that aren't on this device yet: shown with a cloud
+// badge, downloaded the first time they're tapped.
+let online: DriveGame[] = [];
+let onOnlineTap: ((g: DriveGame) => void) | null = null;
+
+export function setOnlineGames(games: DriveGame[], onTap: (g: DriveGame) => void): void {
+  online = games;
+  onOnlineTap = onTap;
+}
+
+const CLOUD_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.1 9.5 4.25 4.25 0 0 0 7 18z"/><path d="M12 10.5v5M9.8 13.4 12 15.6l2.2-2.2"/></svg>';
+
+function onlineCard(g: DriveGame): HTMLElement {
+  const title = parseTitle(g.name.replace(/\.(zip|punnet)$/i, '')).title || g.name;
+  const tap = (): void => onOnlineTap?.(g);
+  const art = artwork(null, title, tap);
+  const flag = document.createElement('span');
+  flag.className = 'card-cloud';
+  flag.title = str('drive.not_downloaded_yet');
+  flag.innerHTML = CLOUD_SVG;
+  const size = g.size ? `${(g.size / 1048576).toFixed(0)} MB` : '';
+  const el = tileCard({
+    label: `${title} - ${str('drive.not_downloaded_yet')}`,
+    art, flag, title, chips: [chip(str('drive.tap_to_download'), 'plat'), ...(size ? [chip(size)] : [])],
+  });
+  el.classList.add('online-card');
+  el.addEventListener('click', (ev) => { if (ev.target === el) tap(); });
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && ev.target === el) { ev.preventDefault(); tap(); }
+  });
+  return el;
+}
+
+function drawOnline(search: string): number {
+  const box = document.getElementById('online-tiles')!;
+  const q = search.trim().toLowerCase();
+  const shown = online.filter((g) => !isFetched(g) && (!q || g.name.toLowerCase().includes(q)));
+  box.hidden = shown.length === 0;
+  box.replaceChildren(...(shown.length
+    ? [sectionHeading(str('drive.in_your_online_library')), tileGrid(shown.map(onlineCard))]
+    : []));
+  return shown.length;
+}
+
 async function render(h: LibraryHandlers): Promise<void> {
   const tiles = document.getElementById('tiles')!;
   const orbitWrap = document.getElementById('orbit-wrap')!;
@@ -167,8 +213,9 @@ async function render(h: LibraryHandlers): Promise<void> {
   for (const f of document.querySelectorAll<HTMLElement>('.art')) releaseArtwork(f);
 
   const writing = h.isSaving();
+  const onlineCount = drawOnline(search);
   saving.hidden = !writing;
-  empty.hidden = games.length > 0 || writing;
+  empty.hidden = games.length > 0 || onlineCount > 0 || writing;
   emptyMsg.textContent = unreadable
     ? str('library.the_game_library_could_not', { 0: unreadable })
     : search

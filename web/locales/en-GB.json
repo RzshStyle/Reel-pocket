@@ -604,10 +604,16 @@
     "other": "Get {n} new games"
   },
   "drive.google_api_key": "Google API key",
+  "drive.in_your_online_library": "In your online library",
   "drive.n_games_in_your_library": {
     "one": "{n} game in your library",
     "other": "{n} games in your library"
   },
+  "drive.n_new_games_added": {
+    "one": "{n} game downloaded",
+    "other": "{n} games downloaded"
+  },
+  "drive.not_downloaded_yet": "Not downloaded yet",
   "drive.on_this_device_tap_to": "On this device - tap to download again",
   "drive.online_library": "Online library",
   "drive.paste_the_shared_folder_link": "Paste the shared Drive folder link",
@@ -615,6 +621,7 @@
   "drive.sets_up_another_phone_with": "Sets up another phone with this library in one tap",
   "drive.setup_help": "Share the Drive folder as \"Anyone with the link\" and paste its link here with your Google API key. You can also paste a setup link from another phone.",
   "drive.setup_link_copied": "Setup link copied. Keep it private: anyone with it can see your games.",
+  "drive.tap_to_download": "Tap to download",
   "drive.that_folder_link_doesn_t": "That folder link doesn't look right. Copy it from Drive's Share button.",
   "drive.try_again": "Try again",
   "drive.your_google_drive_games": "Your games from Google Drive",
