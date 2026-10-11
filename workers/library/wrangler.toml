@@ -1,0 +1,8 @@
+name = "reel-pocket-library"
+main = "worker.js"
+compatibility_date = "2026-07-30"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "GAMES"
+bucket_name = "reel-pocket-games"

@@ -9,7 +9,7 @@ import { enhanceSelect } from './ui/dropdown';
 import { clearArtwork, fillArtwork, hasArtwork, releaseArtwork, showTile } from './ui/art';
 import { chip, sectionHeading, tileCard, tileGrid } from './ui/list';
 import { artwork } from './ui/art';
-import { isFetched, type DriveGame } from './drive';
+import { isFetched, type OnlineGame } from './online';
 import {
   activity, displayTitle, gridArrowNav, mountGameList, systemLabel,
   type GameList, type SortKey,
@@ -145,28 +145,28 @@ function orbitDeps(h: LibraryHandlers): OrbitDeps {
 
 // Games in the online library that aren't on this device yet: shown with a cloud
 // badge, downloaded the first time they're tapped.
-let online: DriveGame[] = [];
-let onOnlineTap: ((g: DriveGame) => void) | null = null;
+let online: OnlineGame[] = [];
+let onOnlineTap: ((g: OnlineGame) => void) | null = null;
 
-export function setOnlineGames(games: DriveGame[], onTap: (g: DriveGame) => void): void {
+export function setOnlineGames(games: OnlineGame[], onTap: (g: OnlineGame) => void): void {
   online = games;
   onOnlineTap = onTap;
 }
 
 const CLOUD_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.1 9.5 4.25 4.25 0 0 0 7 18z"/><path d="M12 10.5v5M9.8 13.4 12 15.6l2.2-2.2"/></svg>';
 
-function onlineCard(g: DriveGame): HTMLElement {
+function onlineCard(g: OnlineGame): HTMLElement {
   const title = parseTitle(g.name.replace(/\.(zip|punnet)$/i, '')).title || g.name;
   const tap = (): void => onOnlineTap?.(g);
   const art = artwork(null, title, tap);
   const flag = document.createElement('span');
   flag.className = 'card-cloud';
-  flag.title = str('drive.not_downloaded_yet');
+  flag.title = str('online.not_downloaded_yet');
   flag.innerHTML = CLOUD_SVG;
   const size = g.size ? `${(g.size / 1048576).toFixed(0)} MB` : '';
   const el = tileCard({
-    label: `${title} - ${str('drive.not_downloaded_yet')}`,
-    art, flag, title, chips: [chip(str('drive.tap_to_download'), 'plat'), ...(size ? [chip(size)] : [])],
+    label: `${title} - ${str('online.not_downloaded_yet')}`,
+    art, flag, title, chips: [chip(str('online.tap_to_download'), 'plat'), ...(size ? [chip(size)] : [])],
   });
   el.classList.add('online-card');
   el.addEventListener('click', (ev) => { if (ev.target === el) tap(); });
@@ -182,7 +182,7 @@ function drawOnline(search: string): number {
   const shown = online.filter((g) => !isFetched(g) && (!q || g.name.toLowerCase().includes(q)));
   box.hidden = shown.length === 0;
   box.replaceChildren(...(shown.length
-    ? [sectionHeading(str('drive.in_your_online_library')), tileGrid(shown.map(onlineCard))]
+    ? [sectionHeading(str('online.in_your_online_library')), tileGrid(shown.map(onlineCard))]
     : []));
   return shown.length;
 }
@@ -435,7 +435,7 @@ export async function openAddSheet(
   returnTo: HTMLElement, pick: (which: 'folder' | 'files', direct?: boolean) => void,
   openOnline?: () => void,
 ): Promise<void> {
-  const onlineRow = sheetRow(str('drive.online_library'), str('drive.your_google_drive_games'));
+  const onlineRow = sheetRow(str('online.online_library'), str('online.your_online_games'));
   onlineRow.addEventListener('click', () => openOnline?.());
   const folderRow = sheetRow(str('library.game_folder'), str('library.one_game_s_folder_or'));
   folderRow.addEventListener('click', () => { closeSheet(); pick('folder'); });

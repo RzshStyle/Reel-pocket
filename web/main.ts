@@ -1,8 +1,8 @@
 import {
-  configFromSetupLink, DRIVE_CHANGED, downloadDriveGame, listDriveGames, loadDriveConfig, markFetched,
-  saveDriveConfig, type DriveConfig, type DriveGame,
-} from './drive';
-import { openDriveLibrary } from './drivesheet';
+  configFromSetupLink, ONLINE_CHANGED, downloadOnlineGame, listOnlineGames, loadOnlineConfig, markFetched,
+  saveOnlineConfig, type OnlineConfig, type OnlineGame,
+} from './online';
+import { openOnlineLibrary } from './onlinesheet';
 import {
   classifyGame, linkedInstances, missingProgramRoms, platformFor, type Game,
 } from '../src/machine/registry';
@@ -781,7 +781,7 @@ async function importFolderSets(sets: FolderSet[], quiet = false): Promise<void>
       trace(`set ${i + 1}/${sets.length}: ${set.name}`);
       try {
         if (set.fetch) {
-          showBusy(str('drive.downloading_n', { 0: parseTitle(archiveStem(set.name)).title || set.name }));
+          showBusy(str('online.downloading_n', { 0: parseTitle(archiveStem(set.name)).title || set.name }));
           set = { ...set, entries: await set.fetch() };
         }
         const setKnown: string[] = [];
@@ -836,7 +836,7 @@ async function importFolderSets(sets: FolderSet[], quiet = false): Promise<void>
 
   // Background fetches from the online library only interrupt when something went wrong.
   if (quiet && !failed.length && !quota) {
-    if (added) showNotice(str('drive.n_new_games_added', { n: added }));
+    if (added) showNotice(str('online.n_new_games_added', { n: added }));
     status.textContent = '';
     return;
   }
@@ -3571,7 +3571,7 @@ function loadFromUrl(raw: string): void {
 const fromUrl = new URLSearchParams(location.search).get('fromUrl');
 if (fromUrl) loadFromUrl(fromUrl);
 
-function importDriveGames(c: DriveConfig, games: DriveGame[], quiet = false): Promise<string[]> {
+function importOnlineGames(c: OnlineConfig, games: OnlineGame[], quiet = false): Promise<string[]> {
   if (batchRunning) return Promise.resolve([]);
   dismissError();
   const landed: string[] = [];
@@ -3580,41 +3580,41 @@ function importDriveGames(c: DriveConfig, games: DriveGame[], quiet = false): Pr
     name: archiveStem(g.name),
     entries: [],
     zip: true,
-    fetch: async () => [await downloadDriveGame(c, g)],
+    fetch: async () => [await downloadOnlineGame(c, g)],
     fetched: (hashes: string[]) => { markFetched(g); landed.push(...hashes); },
   })), quiet).then(() => landed);
 }
 
 // Tapping a cloud game downloads it, then starts it.
-function playOnlineGame(g: DriveGame): void {
-  const c = loadDriveConfig();
+function playOnlineGame(g: OnlineGame): void {
+  const c = loadOnlineConfig();
   if (!c || batchRunning) return;
-  void importDriveGames(c, [g], true).then((hashes) => {
+  void importOnlineGames(c, [g], true).then((hashes) => {
     if (hashes.length === 1) libraryHandlers.onOpen(hashes[0], false);
   });
 }
 
 // The library lists the online library's games as soon as the app opens or comes
 // back to the front; nothing downloads until a game is tapped.
-let driveCheckedAt = 0;
+let onlineCheckedAt = 0;
 async function refreshOnlineGames(force = false): Promise<void> {
-  const c = loadDriveConfig();
+  const c = loadOnlineConfig();
   if (!c) {
     setOnlineGames([], playOnlineGame);
     return;
   }
-  if (document.hidden || (!force && Date.now() - driveCheckedAt < 60_000)) return;
-  driveCheckedAt = Date.now();
+  if (document.hidden || (!force && Date.now() - onlineCheckedAt < 60_000)) return;
+  onlineCheckedAt = Date.now();
   try {
-    setOnlineGames(await listDriveGames(c), playOnlineGame);
+    setOnlineGames(await listOnlineGames(c), playOnlineGame);
   } catch (e) {
-    console.warn('[drive] library check failed', e);
+    console.warn('[online] library check failed', e);
     return;
   }
   if (!librarySection.hidden && !batchRunning) await renderLibrary(libraryHandlers);
 }
 document.addEventListener('visibilitychange', () => void refreshOnlineGames());
-window.addEventListener(DRIVE_CHANGED, () => void refreshOnlineGames(true));
+window.addEventListener(ONLINE_CHANGED, () => void refreshOnlineGames(true));
 
 const addBtn = document.getElementById('addBtn') as HTMLButtonElement;
 function openPicker(which: 'folder' | 'files', direct = false): void {
@@ -3662,7 +3662,7 @@ document.addEventListener('visibilitychange', () => {
 });
 function openAdd(ev: Event): void {
   const from = ev.currentTarget as HTMLElement;
-  void openAddSheet(from, openPicker, () => void openDriveLibrary(from, (c, games) => void importDriveGames(c, games)));
+  void openAddSheet(from, openPicker, () => void openOnlineLibrary(from, (c, games) => void importOnlineGames(c, games)));
 }
 addBtn.addEventListener('click', openAdd);
 document.getElementById('emptyAdd')!.addEventListener('click', openAdd);
@@ -3706,13 +3706,13 @@ console.info(`[fruitulator] build ${buildStamp()}`);
 reportInterruptedImport();
 startFrameLoop();
 
-// A setup link (?library=<folder>&key=<key>) connects this device to the online library.
+// A setup link (?server=<library address>&code=<passcode>) connects this device to the online library.
 // Either way the library then lists the online games.
 {
   const setup = configFromSetupLink(location.href);
   if (setup) {
     history.replaceState(null, '', location.pathname);
-    saveDriveConfig(setup);
+    saveOnlineConfig(setup);
   } else {
     void refreshOnlineGames(true);
   }
