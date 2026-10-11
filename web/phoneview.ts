@@ -384,9 +384,7 @@ export class PhoneView {
     const glass = union([...art, ...reels, ...vfd, ...deck]);
     if (!glass) return null;
     const split = this.findSplit(art, glass, panelTop, capH);
-    // Each half is framed on its own: the top glass and the reel panel are
-    // often drawn at different widths and angles, so one shared crop would
-    // cut into one or leave cabinet showing on the other.
+    // Each half is framed from its own artwork, so neither is cut into.
     const mid = (r: Rect): number => r.top + r.height / 2;
     const upper = art.filter((r) => mid(r) < split);
     const below = [...art.filter((r) => mid(r) >= split), ...reels, ...vfd, ...deck];
@@ -404,7 +402,16 @@ export class PhoneView {
     if (split - topStart < capH * 2) return null;
     const top = frame(upper, topStart, split);
     const bottom = frame(below, split, bottomEnd);
-    return top && bottom ? { top, bottom } : null;
+    if (!top || !bottom) return null;
+    // Both halves share one column range and so one horizontal scale:
+    // prize trails that run from the top glass down into the reel panel
+    // then stay in line.
+    const left = Math.min(top.left, bottom.left);
+    const right = Math.max(top.left + top.width, bottom.left + bottom.width);
+    return {
+      top: { ...top, left, width: right - left },
+      bottom: { ...bottom, left, width: right - left },
+    };
   }
 
   // Where the top glass ends and the reel panel begins. Machines differ,
