@@ -11,8 +11,8 @@ import { BUTTON_BAR_CHANGED, buttonBarOn } from './deckbar';
 
 export type ViewMode = 'auto' | 'flat' | 'whole';
 
-// Bumped when Flat became the default, so everyone starts on it once.
-const MODE_KEY = 'fruitulator.phoneview3';
+// Bumped when the defaults change, so everyone starts on them once.
+const MODE_KEY = 'fruitulator.phoneview4';
 const MODES: { id: ViewMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
   { id: 'flat', label: 'Flat' },
@@ -155,6 +155,16 @@ function friendlyWords(name: string): string {
   return out.join(' ');
 }
 
+// Touch screens (phones, tablets) start in Flat; computers with a mouse
+// start on the whole machine.
+function defaultMode(): ViewMode {
+  try {
+    return matchMedia('(pointer: coarse)').matches ? 'flat' : 'whole';
+  } catch {
+    return 'flat';
+  }
+}
+
 function storedMode(): ViewMode | null {
   try {
     const v = localStorage.getItem(MODE_KEY);
@@ -207,7 +217,7 @@ export class PhoneView {
   private feature = el('div', 'pv-feature');
 
   constructor(private host: PhoneViewHost) {
-    this.mode = storedMode() ?? 'flat';
+    this.mode = storedMode() ?? defaultMode();
     this.probe.width = 8;
     this.probe.height = 8;
 
