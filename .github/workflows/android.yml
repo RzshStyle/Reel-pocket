@@ -2,9 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
-    # A version tag (v1.0, ...) also keeps that build as its own permanent release.
-    tags: ['v*']
+    # A release/<version> branch (release/v1.0, ...) keeps that build as its own
+    # permanent release, tagged <version>, without touching the live download.
+    branches: [main, 'release/**']
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
           path: ReelPocket.apk
       # A fixed release so the phone download link never changes:
       # https://github.com/RzshStyle/Reel-pocket/releases/latest/download/ReelPocket.apk
-      - if: github.ref_type != 'tag'
+      - if: github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
@@ -49,11 +49,15 @@ jobs:
           body: "Latest Android build of Reel Pocket from ${{ github.sha }}. Download ReelPocket.apk on your phone and open it to install."
           make_latest: true
           files: ReelPocket.apk
-      - if: github.ref_type == 'tag'
+      - if: startsWith(github.ref_name, 'release/')
+        id: version
+        run: echo "tag=${GITHUB_REF_NAME#release/}" >> "$GITHUB_OUTPUT"
+      - if: startsWith(github.ref_name, 'release/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Reel Pocket ${{ github.ref_name }}
-          body: "Saved version ${{ github.ref_name }} of Reel Pocket (${{ github.sha }}). Download ReelPocket.apk to install this exact version."
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Reel Pocket ${{ steps.version.outputs.tag }}
+          body: "Saved version ${{ steps.version.outputs.tag }} of Reel Pocket (${{ github.sha }}). Download ReelPocket.apk to install this exact version."
           make_latest: false
           files: ReelPocket.apk
