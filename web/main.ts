@@ -122,6 +122,7 @@ canvas.height = 480;
 const screenEl = document.getElementById('screen') as HTMLCanvasElement;
 const screenCtx = screenEl.getContext('2d')!;
 let screenDirty = true;
+let screenCovered = false;
 const smoothFit = bootValue('smooth');
 const stage = document.getElementById('stage') as HTMLElement;
 const ctx = canvas.getContext('2d')!;
@@ -2325,7 +2326,13 @@ function frame(now: number): void {
     screenDirty = true;
   }
   const drew = screenDirty;
-  presentScreen();
+  // Under the flat view the normal screen is hidden: don't scale the
+  // machine down for it, and redraw it in full when it shows again.
+  if (phoneView.screenCovered) { screenDirty = false; screenCovered = true; }
+  else {
+    if (screenCovered) { screenCovered = false; screenDirty = true; }
+    presentScreen();
+  }
   phoneView.frame(drew);
   magnifier.present();
   if (BENCH) benchSample(t0);

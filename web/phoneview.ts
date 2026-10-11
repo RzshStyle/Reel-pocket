@@ -61,6 +61,8 @@ interface Key {
   hi: number;
   litAt: number;
   label: string;
+  // Its glow colour has been read from a lit frame.
+  glow?: boolean;
 }
 
 function union(rects: Rect[]): Rect | null {
@@ -515,6 +517,11 @@ export class PhoneView {
     }
   }
 
+  // Whether the normal screen is covered, so the host need not draw it.
+  get screenCovered(): boolean {
+    return this.flatActive && !this.flatCv.hidden;
+  }
+
   private showFlat(on: boolean): void {
     this.flatCv.hidden = !on;
     this.host.canvas.style.visibility = on ? 'hidden' : '';
@@ -630,9 +637,11 @@ export class PhoneView {
     if (this.flatActive && (drew || this.flatStale)) { this.flatStale = false; this.drawFlat(); }
     if (++this.frameNo % 60 === 0) this.relabel();
     if (this.frameNo % 2) return;
-    for (const k of this.deck) this.paintKey(k);
+    // With the button bar off the deck keys are hidden: skip their work.
+    const bar = buttonBarOn();
+    if (bar) for (const k of this.deck) this.paintKey(k);
     if (this.frameNo % 2 === 0) {
-      for (const k of this.deck) this.measure(k, now);
+      if (bar) for (const k of this.deck) this.measure(k, now);
       for (const k of this.extras) this.measure(k, now);
       this.updateFeature(now);
     }
@@ -764,6 +773,15 @@ export class PhoneView {
   }
 
   private measure(k: Key, now: number): void {
+    // The machine says which lamps are lit. Reading pixels back from the
+    // cabinet canvas stalls the GPU on phones, so do it only without that,
+    // or once per key to pick up its glow colour.
+    const known = this.host.isLit(k.lp);
+    if (known !== null && (!known || k.glow)) {
+      if (known) k.litAt = now;
+      k.el.classList.toggle('lit', known);
+      return;
+    }
     const ctx = this.probe.getContext('2d', { willReadFrequently: true });
     if (!ctx || !this.cab) return;
     const c = this.cab.content;
@@ -775,9 +793,10 @@ export class PhoneView {
     const lum = (0.3 * r + 0.59 * g + 0.11 * b) / n;
     k.lo = Math.min(k.lo, lum);
     k.hi = Math.max(k.hi, lum);
-    const lit = this.host.isLit(k.lp) ?? (k.hi - k.lo > 18 && lum > k.lo + 0.55 * (k.hi - k.lo));
+    const lit = known ?? (k.hi - k.lo > 18 && lum > k.lo + 0.55 * (k.hi - k.lo));
     if (lit) {
       k.litAt = now;
+      k.glow = true;
       k.el.style.setProperty('--glow', `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`);
     }
     k.el.classList.toggle('lit', lit);
