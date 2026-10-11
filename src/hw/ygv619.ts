@@ -31,6 +31,10 @@ export class Ygv619 {
   private key = 0; private fg = 0; private bg = 0; private mode = 0;
   private srcBase = 0; private dstBase = 0;
   layerA = 0; layerB = 0; layerC = 0;
+  // The game's own screen size in VRAM (pixels across, rows), learnt from its full-screen clears.
+  // Layouts rarely declare it, so a 640x480 game can land on a 600x800 chip; reading past the
+  // game's screen shows the other buffer and flickers. 0 means "same as the chip".
+  contentW = 0; contentH = 0;
 
   private busyLeft = 0;
   private armed = false;
@@ -55,6 +59,7 @@ export class Ygv619 {
     this.key = this.fg = this.bg = this.mode = 0;
     this.srcBase = this.dstBase = 0;
     this.layerA = this.layerB = this.layerC = 0;
+    this.contentW = this.contentH = 0;
     this.busyLeft = 0;
     this.armed = false;
     this.irqFlag = false;
@@ -161,11 +166,22 @@ export class Ygv619 {
   }
 
   private fill(): void {
+    this.learnScreenSize();
     let at = this.dstWord(this.dstBase, this.dstX, this.dstY);
     const pairs = this.widthPx >> 1;
     for (let r = 0; r < this.rows; r++, at += PITCH_WORDS) {
       for (let i = 0; i < pairs * 2; i++) this.vram[(at + i) & 0x7fffff] = this.fg;
     }
+  }
+
+  private learnScreenSize(): void {
+    if (this.dstX !== 0 || this.dstY !== 0) return;
+    const w = this.widthPx;
+    const h = this.rows;
+    if (!((w === 640 && h === 480) || (w === 800 && h === 600))) return;
+    if (w === this.contentW && h === this.contentH) return;
+    this.contentW = w;
+    this.contentH = h;
   }
 
   private copy(): void {
@@ -250,6 +266,10 @@ export class Ygv619 {
     const w = this.width;
     const h = this.height;
     const out = this.frame;
+    const portrait = w < h;
+    // VRAM is always laid out landscape: a portrait screen is stored on its side.
+    const across = this.contentW || (portrait ? h : w);
+    const down = this.contentH || (portrait ? w : h);
     let changed = false;
     let o = 0;
     const put = (i: number) => {
@@ -259,10 +279,20 @@ export class Ygv619 {
       if (out[o] !== c) { out[o] = c; changed = true; }
       o++;
     };
-    if (w < h) {
-      for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) put(c * PITCH_WORDS + (h - r));
+    if (portrait) {
+      const rowOf = new Int32Array(w);
+      for (let c = 0; c < w; c++) rowOf[c] = Math.floor((c * down) / w) * PITCH_WORDS;
+      for (let r = 0; r < h; r++) {
+        const x = across - Math.floor((r * across) / h);
+        for (let c = 0; c < w; c++) put(rowOf[c] + x);
+      }
     } else {
-      for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) put(r * PITCH_WORDS + c);
+      const xOf = new Int32Array(w);
+      for (let c = 0; c < w; c++) xOf[c] = Math.floor((c * across) / w);
+      for (let r = 0; r < h; r++) {
+        const row = Math.floor((r * down) / h) * PITCH_WORDS;
+        for (let c = 0; c < w; c++) put(row + xOf[c]);
+      }
     }
     if (changed) this.frameSerial++;
   }
