@@ -1,0 +1,8 @@
+{
+  "appId": "uk.reelpocket.app",
+  "appName": "Reel Pocket",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#000000"
+  }
+}

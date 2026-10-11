@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npx tsc && npx vite build --base=./
+      - run: rm -f dist/_redirects
+      - run: npx cap sync android
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug -PversionCode=${{ github.run_number }}
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk ReelPocket.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReelPocket-apk
+          path: ReelPocket.apk
+      # A fixed release so the phone download link never changes:
+      # https://github.com/RzshStyle/Reel-pocket/releases/latest/download/ReelPocket.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Reel Pocket Android (latest)
+          body: "Latest Android build of Reel Pocket from ${{ github.sha }}. Download ReelPocket.apk on your phone and open it to install."
+          make_latest: true
+          files: ReelPocket.apk
